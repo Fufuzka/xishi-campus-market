@@ -122,14 +122,22 @@ def self_test(home, output):
         assert '<svg' in request('/assets/book.svg').decode()
         request('/api/auth/login',{'username':'demo','password':'Campus2026!'})
         created=json.loads(request('/api/products',{'title':'桌面包持久化验收','description':'仅用于软件打包测试的商品记录。','price':'20.29','category':'教材书籍','image_url':'/assets/book.svg','contact':'测试联系方式','location':'图书馆门口','condition':'轻微使用'}))
+        request('/api/search/history',{'keyword':'桌面历史验收'})
         old_port=url.split(':')[-1]
         controller.local.stop()
         url=controller.local.start()
         assert json.loads(request('/api/products/'+str(created['id'])))['price']==20.29
         assert json.loads(request('/api/me'))['username']=='demo'
+        assert json.loads(request('/api/search/history'))['items'][0]=='桌面历史验收'
+        request('/api/auth/logout',{})
+        request('/api/search/history')
+        request('/api/search/history',{'keyword':'游客历史验收'})
+        controller.local.stop()
+        url=controller.local.start()
+        assert json.loads(request('/api/search/history'))['items'][0]=='游客历史验收'
         write_config(home,{'mode':'local','server_url':''})
         assert read_config(home)['mode']=='local'
-        result={'status':'PASS','packaged':bool(getattr(sys,'frozen',False)),'health':info,'seed_products':products['total'],'restart_persistence':True,'session_after_restart':True,'bundled_vue_assets':True,'loopback_only':True,'initial_port':old_port,'runtime':sys.version}
+        result={'status':'PASS','packaged':bool(getattr(sys,'frozen',False)),'health':info,'seed_products':products['total'],'restart_persistence':True,'session_after_restart':True,'bundled_vue_assets':True,'account_search_history_after_restart':True,'guest_search_history_after_restart':True,'loopback_only':True,'initial_port':old_port,'runtime':sys.version}
     finally:
         controller.local.stop()
     Path(output).write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')

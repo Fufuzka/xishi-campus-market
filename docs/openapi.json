@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "校园集市 API",
-    "version": "1.0.0"
+    "version": "1.3.0"
   },
   "paths": {
     "/api/auth/register": {
@@ -159,6 +159,162 @@
         }
       }
     },
+    "/api/search/history": {
+      "get": {
+        "tags": [
+          "搜索"
+        ],
+        "summary": "Get Search History",
+        "operationId": "get_search_history_api_search_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "搜索"
+        ],
+        "summary": "Save Search History",
+        "operationId": "save_search_history_api_search_history_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchHistoryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "搜索"
+        ],
+        "summary": "Delete Search History",
+        "operationId": "delete_search_history_api_search_history_delete",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search/suggestions": {
+      "get": {
+        "tags": [
+          "搜索"
+        ],
+        "summary": "Search Suggestions",
+        "operationId": "search_suggestions_api_search_suggestions_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 24,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/products": {
       "get": {
         "tags": [
@@ -232,13 +388,54 @@
             "required": false,
             "schema": {
               "enum": [
+                "relevance",
                 "newest",
                 "price_asc",
                 "price_desc"
               ],
               "type": "string",
-              "default": "newest",
+              "default": "relevance",
               "title": "Sort"
+            }
+          },
+          {
+            "name": "condition",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "全新",
+                    "几乎全新",
+                    "轻微使用",
+                    "正常使用"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Condition"
+            }
+          },
+          {
+            "name": "published_within",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 14,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Published Within"
             }
           },
           {
@@ -886,6 +1083,21 @@
           "nickname"
         ],
         "title": "Registration"
+      },
+      "SearchHistoryInput": {
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Keyword"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keyword"
+        ],
+        "title": "SearchHistoryInput"
       },
       "StatusInput": {
         "properties": {

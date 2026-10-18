@@ -129,3 +129,97 @@ def test_money_precision(clients):
     pid=a.post('/api/products',json=payload(price='0.29')).json()['id']
     assert b.get(f'/api/products/{pid}').json()['price']==0.29
     with main.db() as c:assert c.execute('SELECT price_cents FROM products WHERE id=?',(pid,)).fetchone()[0]==29
+
+def test_relevance_is_default_and_can_switch_to_price_or_newest(clients):
+    a,b=clients;signup(a)
+    titles=['键盘','键盘机械版','无线键盘','桌面配件']
+    for i,title in enumerate(titles):
+        assert a.post('/api/products',json=payload(title=title,description='这是一款键盘商品，保存完好。',price=str(40-i*10))).status_code==201
+    assert [p['title'] for p in b.get('/api/products?q=键盘').json()['items']]==titles
+    assert b.get('/api/products?q=键盘&sort=newest').json()['items'][0]['title']=='桌面配件'
+    assert [p['price'] for p in b.get('/api/products?q=键盘&sort=price_asc').json()['items']]==[10,20,30,40]
+    assert [p['price'] for p in b.get('/api/products?q=键盘&sort=price_desc').json()['items']]==[40,30,20,10]
+
+def test_search_multiple_terms_and_stable_pagination(clients):
+    a,b=clients;signup(a)
+    for title,description in [('无线键盘','机械键盘，适合学习使用。'),('键盘机械款','有线连接，适合学习使用。'),('无线耳机','保存完好的无线耳机。')]:
+        a.post('/api/products',json=payload(title=title,description=description))
+    r=b.get('/api/products',params={'q':'  键盘   无线 '}).json()
+    assert r['total']==1 and r['items'][0]['title']=='无线键盘'
+    first=b.get('/api/products?q=键盘&page_size=1&page=1').json()['items'][0]['id']
+    second=b.get('/api/products?q=键盘&page_size=1&page=2').json()['items'][0]['id']
+    assert first!=second
+
+def test_condition_and_published_within_combined(clients):
+    a,b=clients;signup(a)
+    new=a.post('/api/products',json=payload(condition='全新',price='25')).json()['id']
+    old=a.post('/api/products',json=payload(condition='全新',price='30')).json()['id']
+    used=publish(a)
+    with main.db() as c:
+        c.execute("UPDATE products SET created_at=datetime('now','-8 days') WHERE id=?",(old,))
+    r=b.get('/api/products',params={'condition':'全新','published_within':7,'category':'教材书籍','min_price':20,'max_price':40}).json()
+    assert [p['id'] for p in r['items']]==[new]
+    assert b.get('/api/products?condition=全新&published_within=14').json()['total']==2
+    assert b.get('/api/products?published_within=1').json()['total']==2
+
+@pytest.mark.parametrize('query',['condition=损坏','published_within=2','published_within=0','published_within=15','published_within=abc','min_price=NaN','max_price=Infinity','min_price=0.001'])
+def test_search_filter_validation(clients,query):
+    _,b=clients
+    assert b.get('/api/products?'+query).status_code==422
+
+def test_guest_history_isolated_deduplicated_and_capped(clients):
+    a,b=clients
+    response=a.get('/api/search/history')
+    assert response.json()=={'items':[],'scope':'device'}
+    assert 'HttpOnly' in response.headers['set-cookie']
+    for i in range(15):
+        assert a.post('/api/search/history',json={'keyword':f'搜索 {i}'}).status_code==200
+    assert len(a.get('/api/search/history').json()['items'])==12
+    assert a.get('/api/search/history').json()['items'][0]=='搜索 14'
+    assert b.get('/api/search/history').json()['items']==[]
+    a.post('/api/search/history',json={'keyword':'  搜索    4  '})
+    assert a.get('/api/search/history').json()['items'][0]=='搜索 4'
+    assert len(a.get('/api/search/history').json()['items'])==12
+    a.delete('/api/search/history',params={'keyword':'搜索 4'})
+    assert '搜索 4' not in a.get('/api/search/history').json()['items']
+    a.delete('/api/search/history')
+    assert a.get('/api/search/history').json()['items']==[]
+
+def test_guest_and_account_search_history_never_mix(clients):
+    a,b=clients
+    a.post('/api/search/history',json={'keyword':'游客记录'})
+    signup(a)
+    assert a.get('/api/search/history').json()=={'items':[],'scope':'account'}
+    a.post('/api/search/history',json={'keyword':'我的键盘'})
+    signup(b,'other')
+    assert b.get('/api/search/history').json()['items']==[]
+    b.delete('/api/search/history')
+    assert a.get('/api/search/history').json()['items']==['我的键盘']
+    a.post('/api/auth/logout')
+    assert a.get('/api/search/history').json()['items']==['游客记录']
+    b.post('/api/auth/login',json={'username':'student','password':'Campus2026!'})
+    assert b.get('/api/search/history').json()['items']==['我的键盘']
+
+@pytest.mark.parametrize('word',['','   ','x'*101])
+def test_history_keyword_validation(clients,word):
+    a,_=clients
+    assert a.post('/api/search/history',json={'keyword':word}).status_code==422
+
+def test_history_cookie_persists_across_database_reinitialization(clients):
+    a,_=clients
+    a.post('/api/search/history',json={'keyword':'校园教材'})
+    main.init_db()
+    assert a.get('/api/search/history').json()['items']==['校园教材']
+
+def test_suggestions_only_come_from_on_sale_titles(clients):
+    a,b=clients;signup(a)
+    pid=a.post('/api/products',json=payload(title='无线机械键盘')).json()['id']
+    hidden=a.post('/api/products',json=payload(title='已售古董相机')).json()['id']
+    a.patch(f'/api/products/{hidden}/status',json={'status':'sold'})
+    suggestions=b.get('/api/search/suggestions').json()['items']
+    assert '键盘' in suggestions and '相机' not in suggestions and '已售古董相机' not in suggestions
+    assert b.get('/api/search/suggestions?q=无线').json()['items']==['无线机械键盘']
+    assert b.get('/api/search/suggestions?q=%27%20OR%201=1--').json()['items']==[]
+    a.patch(f'/api/products/{pid}/status',json={'status':'off_shelf'})
+    assert b.get('/api/search/suggestions').json()['items']==[]
+    assert b.get('/api/search/suggestions?limit=25').status_code==422

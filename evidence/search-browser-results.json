@@ -1,0 +1,62 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "可能想搜使用真实在售商品",
+      "result": "PASS"
+    },
+    {
+      "name": "历史记录去重并按最近搜索置顶",
+      "result": "PASS"
+    },
+    {
+      "name": "历史点击直接复用",
+      "result": "PASS"
+    },
+    {
+      "name": "重载后保留历史",
+      "result": "PASS"
+    },
+    {
+      "name": "输入联想不记入历史且支持键盘选择",
+      "result": "PASS"
+    },
+    {
+      "name": "历史单条删除与清空确认",
+      "result": "PASS"
+    },
+    {
+      "name": "新搜索默认最相关而非最新或价格",
+      "result": "PASS"
+    },
+    {
+      "name": "价格按钮低高双向切换并能恢复相关度",
+      "result": "PASS"
+    },
+    {
+      "name": "取消筛选保留原结果",
+      "result": "PASS"
+    },
+    {
+      "name": "筛选价格倒置拒绝且不会关闭面板",
+      "result": "PASS"
+    },
+    {
+      "name": "分类成色价格时间组合筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "逐项移除条件保留关键词与其余筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "抽屉重置只改草稿且手机筛选无溢出",
+      "result": "PASS"
+    },
+    {
+      "name": "登录与退出切换历史范围",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}

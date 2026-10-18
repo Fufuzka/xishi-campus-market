@@ -57,7 +57,7 @@ async def lifespan(app):
     init_db()
     yield
 
-app = FastAPI(title='校园集市 API', version='1.0.0', lifespan=lifespan)
+app = FastAPI(title='校园集市 API', version='1.3.0', lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(request, exc):
@@ -140,7 +140,7 @@ def me(user=Depends(current_user)):
 def health():
     with db() as c:
         c.execute('SELECT 1')
-    return {'status': 'ok', 'version': '1.0.0'}
+    return {'status': 'ok', 'version': '1.3.0'}
 
 @app.get('/api/categories', tags=['商品'])
 def categories():
@@ -190,22 +190,106 @@ def product_dict(row, include_contact=False):
 
 SELECT_PRODUCT = 'SELECT p.*,u.nickname AS seller FROM products p JOIN users u ON u.id=p.owner_id'
 
+def search_owner(request, response):
+    try:
+        return 'user:' + str(current_user(request)['id']), 'account'
+    except HTTPException:
+        pass
+    import re
+    token = request.cookies.get('xishi_search_device', '')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
+        token = secrets.token_urlsafe(32)
+        response.set_cookie('xishi_search_device', token, httponly=True, samesite='lax', secure=os.environ.get('COOKIE_SECURE') == '1', max_age=86400*365)
+    return 'device:' + hashlib.sha256(token.encode()).hexdigest(), 'device'
+
+class SearchHistoryInput(BaseModel):
+    keyword: str = Field(min_length=1, max_length=100)
+
+    @field_validator('keyword')
+    @classmethod
+    def clean_keyword(cls, value):
+        value = ' '.join(value.split())
+        if not value:
+            raise ValueError('搜索词不能为空')
+        return value
+
+@app.get('/api/search/history', tags=['搜索'])
+def get_search_history(request: Request, response: Response):
+    owner, scope = search_owner(request, response)
+    with db() as c:
+        rows = c.execute('SELECT keyword FROM search_history WHERE owner_key=? ORDER BY used_at DESC,id DESC LIMIT 12', (owner,)).fetchall()
+    return {'items':[r['keyword'] for r in rows], 'scope':scope}
+
+@app.post('/api/search/history', tags=['搜索'])
+def save_search_history(p: SearchHistoryInput, request: Request, response: Response):
+    owner, _ = search_owner(request, response)
+    with db() as c:
+        c.execute('INSERT INTO search_history(owner_key,keyword_key,keyword,used_at) VALUES(?,?,?,?) ON CONFLICT(owner_key,keyword_key) DO UPDATE SET keyword=excluded.keyword,used_at=excluded.used_at', (owner,p.keyword.casefold(),p.keyword,time.time_ns()//1000))
+        c.execute('DELETE FROM search_history WHERE owner_key=? AND id NOT IN (SELECT id FROM search_history WHERE owner_key=? ORDER BY used_at DESC,id DESC LIMIT 12)', (owner,owner))
+    return {'ok':True}
+
+@app.delete('/api/search/history', tags=['搜索'])
+def delete_search_history(request: Request, response: Response, keyword: str | None = Query(None,max_length=100)):
+    owner, _ = search_owner(request,response)
+    with db() as c:
+        if keyword is None:
+            c.execute('DELETE FROM search_history WHERE owner_key=?',(owner,))
+        else:
+            c.execute('DELETE FROM search_history WHERE owner_key=? AND keyword_key=?',(owner,' '.join(keyword.split()).casefold()))
+    return {'ok':True}
+
+@app.get('/api/search/suggestions', tags=['搜索'])
+def search_suggestions(q: str = Query('',max_length=100), limit: int = Query(8,ge=1,le=24)):
+    term = ' '.join(q.split())
+    with db() as c:
+        if term:
+            tokens = list(dict.fromkeys(term.split()))
+            clauses = ' AND '.join('instr(lower(title),lower(?))>0' for _ in tokens)
+            rows = c.execute("SELECT title FROM products WHERE status='on_sale' AND " + clauses + ' GROUP BY title ORDER BY CASE WHEN lower(title)=lower(?) THEN 0 WHEN instr(lower(title),lower(?))=1 THEN 1 ELSE 2 END,MAX(id) DESC LIMIT ?', tokens+[term,term,limit]).fetchall()
+            return {'items':[r['title'] for r in rows]}
+        # 候选词只在确实存在匹配在售商品时展示，不伪造热搜次数。
+        terms = ['教材','耳机','台灯','运动鞋','相机','帆布包','键盘','绿植','自行车','书桌','显示器','背包']
+        result=[]
+        for word in terms:
+            if c.execute("SELECT 1 FROM products WHERE status='on_sale' AND instr(title,?)>0 LIMIT 1",(word,)).fetchone():
+                result.append(word)
+        for row in c.execute("SELECT title FROM products WHERE status='on_sale' GROUP BY title ORDER BY MAX(id) DESC LIMIT 24"):
+            if row['title'] not in result:
+                result.append(row['title'])
+    return {'items':result[:limit]}
+
 @app.get('/api/products', tags=['商品'])
-def products(q: str = Query('', max_length=100), category: str = '', min_price: Decimal = Query(0, ge=0, le=999999), max_price: Decimal = Query(999999, ge=0, le=999999), sort: Literal['newest','price_asc','price_desc']='newest', page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
+def products(q: str = Query('', max_length=100), category: str = '', min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc']='relevance', condition: Literal['全新','几乎全新','轻微使用','正常使用'] | None = None, published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
     if min_price > max_price:
         raise HTTPException(422, '最低价不能高于最高价')
+    if published_within is not None and published_within not in (1,3,7,14):
+        raise HTTPException(422, '发布时间仅支持 1、3、7、14 天内')
     where = " WHERE p.status='on_sale' AND p.price_cents>=? AND p.price_cents<=?"
     args = [int(min_price * 100), int(max_price * 100)]
-    if q.strip():
+    term = ' '.join(q.split())
+    tokens = list(dict.fromkeys(term.split()))
+    for token in tokens:
         where += ' AND (instr(lower(p.title),lower(?))>0 OR instr(lower(p.description),lower(?))>0)'
-        args.extend([q.strip(), q.strip()])
+        args.extend([token,token])
     if category:
         where += ' AND p.category=?'
         args.append(category)
-    order = {'newest': 'p.id DESC', 'price_asc': 'p.price_cents,p.id DESC', 'price_desc': 'p.price_cents DESC,p.id DESC'}[sort]
+    if condition:
+        where += ' AND p.condition=?'
+        args.append(condition)
+    if published_within:
+        where += " AND p.created_at>=datetime('now',?)"
+        args.append(f'-{published_within} days')
+    order_args=[]
+    if sort=='relevance' and term:
+        title_tokens=' AND '.join('instr(lower(p.title),lower(?))>0' for _ in tokens)
+        order='CASE WHEN lower(p.title)=lower(?) THEN 0 WHEN instr(lower(p.title),lower(?))=1 THEN 1 WHEN instr(lower(p.title),lower(?))>0 THEN 2 WHEN '+title_tokens+' THEN 3 ELSE 4 END,p.id DESC'
+        order_args=[term,term,term]+tokens
+    else:
+        order = {'relevance':'p.id DESC','newest':'p.id DESC','price_asc':'p.price_cents,p.id DESC','price_desc':'p.price_cents DESC,p.id DESC'}[sort]
     with db() as c:
         total = c.execute('SELECT COUNT(*) FROM products p' + where, args).fetchone()[0]
-        rows = c.execute(SELECT_PRODUCT + where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?', args + [page_size, (page-1)*page_size]).fetchall()
+        rows = c.execute(SELECT_PRODUCT + where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?', args + order_args + [page_size, (page-1)*page_size]).fetchall()
     return {'items': [product_dict(r) for r in rows], 'total': total, 'page': page, 'page_size': page_size}
 
 @app.get('/api/me/products', tags=['个人中心'])

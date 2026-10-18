@@ -4,11 +4,13 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from importlib import metadata
 import hashlib
 import json
+import re
 
 root=Path(__file__).resolve().parents[1]
-exe=root/'dist/夕拾.exe'
+version=re.search(r"StringStruct\('ProductVersion', '([^']+)'\)", (root/'desktop/version-info.txt').read_text(encoding='utf-8')).group(1)
+exe=root/'dist'/version/'夕拾.exe'
 archive=root.parent/'夕拾-Windows便携版.zip'
-instructions='''夕拾校园集市 Windows 便携版 1.2.0
+instructions='''夕拾校园集市 Windows 便携版 1.3.0
 
 一、启动软件
 解压后双击“夕拾.exe”。不需要安装 Python 或手动启动服务。
@@ -23,6 +25,8 @@ https://developer.microsoft.com/microsoft-edge/webview2/
 可自行注册新账号，发布、编辑、上传图片、收藏和留言。
 密码右侧眼睛按钮可显示/隐藏输入，登录与注册均支持。
 新版采用固定侧栏和顶部工具栏，侧栏可直接打开连接设置与使用帮助。
+搜索支持历史记录、可能想搜、输入联想；默认最相关，价格按钮切换低高排序。
+筛选支持分类、成色、价格区间和发布时间，条件可逐项移除。
 
 三、以后切换联网
 在服务器部署好同一套校园集市后：
@@ -39,7 +43,7 @@ https://developer.microsoft.com/microsoft-edge/webview2/
 原网页项目 data 目录与桌面版独立，若要迁移须另做备份与迁入。
 
 五、验收状态
-41 项接口与桌面配置测试通过。
+59 项接口与桌面配置测试通过，27 项浏览器流程检查通过。
 实际 EXE 已验证窗口、连接测试、本地/另一服务切换、切回后数据保留。
 EXE 服务已验证新增商品和重启后数据及会话保留。
 公网 HTTPS 服务器尚未部署，不将本机测试当作公网验收。
@@ -65,6 +69,6 @@ with ZipFile(archive,'w',ZIP_DEFLATED) as z:
             if p.is_file() and p.suffix not in ('.py','.pyc'):
                 z.write(p,base+'许可原文/'+name+'/'+str(file).replace('\\','/'))
                 license_count+=1
-    z.writestr(base+'构建信息.json',json.dumps({'version':'1.2.0','platform':'Windows x64','exe_sha256':hashlib.sha256(exe.read_bytes()).hexdigest(),'runtime':'WebView2 required','tests_passed':41},ensure_ascii=False,indent=2).encode('utf-8'))
+    z.writestr(base+'构建信息.json',json.dumps({'version':'1.3.0','platform':'Windows x64','exe_sha256':hashlib.sha256(exe.read_bytes()).hexdigest(),'runtime':'WebView2 required','tests_passed':59},ensure_ascii=False,indent=2).encode('utf-8'))
 with ZipFile(archive) as z:assert z.testzip() is None
 print(json.dumps({'bytes':archive.stat().st_size,'licenses':license_count,'exe_bytes':exe.stat().st_size}))

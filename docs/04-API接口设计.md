@@ -41,7 +41,9 @@
 | category | 空字符串 | 不传为全部；按分类精确匹配，无匹配返回空数组 |
 | min_price | 0；0–999999 | 单位元，含下界 |
 | max_price | 999999；0–999999 | 含上界，不能小于最低价 |
-| sort | newest | newest / price_asc / price_desc |
+| sort | relevance | relevance / newest / price_asc / price_desc |
+| condition | 不限 | 全新 / 几乎全新 / 轻微使用 / 正常使用 |
+| published_within | 不限 | 1 / 3 / 7 / 14 天内发布 |
 | page | 1；>=1 | 页码 |
 | page_size | 12；1–48 | 每页大小 |
 
@@ -101,3 +103,7 @@ PATCH 请求 `{"status":"off_shelf"}`，状态只能为 on_sale / off_shelf / so
 ## 8. 接口变更与兼容
 
 本版完整替换编辑使用 PUT；收藏 PUT / DELETE 幂等；注册不是幂等，重复用户名 409。前端不重试写请求，避免网络异常时重复发布。后续新增接口保持现有字段语义；破坏性变更需升级路径或版本并同步 Spec、OpenAPI 和测试。
+
+## 9. 1.3 搜索接口
+
+GET /search/suggestions 接受 q（最多 100 字）、limit（默认 8、1–24），返回 items 字符串数组；只从真实在售标题生成候选。GET /search/history 返回当前范围的 items 及 scope（account / device）。POST /search/history 接受 keyword；DELETE /search/history 通过可选 keyword 删除一条或清空当前范围。游客通过 HttpOnly 随机设备 Cookie 识别，不要求登录；登录账号与游客范围不合并。详见 12 文档和导出的 OpenAPI。

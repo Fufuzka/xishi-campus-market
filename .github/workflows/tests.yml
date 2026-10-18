@@ -31,6 +31,7 @@ jobs:
         run: |
           node --check frontend/app.js
           node --check scripts/browser-test.cjs
+          node --check scripts/search-browser-test.cjs
           node --check scripts/build-report.cjs
       - name: Run API and desktop configuration tests
         env:

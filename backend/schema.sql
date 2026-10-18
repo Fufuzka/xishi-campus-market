@@ -27,3 +27,9 @@ CREATE TABLE IF NOT EXISTS messages (
  parent_id INTEGER REFERENCES messages(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_messages_product ON messages(product_id,id);
+CREATE TABLE IF NOT EXISTS search_history (
+ id INTEGER PRIMARY KEY, owner_key TEXT NOT NULL, keyword_key TEXT NOT NULL,
+ keyword TEXT NOT NULL, used_at INTEGER NOT NULL,
+ UNIQUE(owner_key,keyword_key)
+);
+CREATE INDEX IF NOT EXISTS idx_search_history_owner ON search_history(owner_key,used_at DESC);
