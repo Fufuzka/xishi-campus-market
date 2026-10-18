@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - market-data:/app/data
+    environment:
+      COOKIE_SECURE: "0"
+volumes:
+  market-data:

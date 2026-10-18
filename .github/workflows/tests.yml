@@ -1,0 +1,45 @@
+name: Project tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: "1"
+      MARKET_DATA_DIR: ${{ runner.temp }}/xishi-ci-data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.lock.txt
+      - name: Check JavaScript syntax
+        run: |
+          node --check frontend/app.js
+          node --check scripts/browser-test.cjs
+          node --check scripts/build-report.cjs
+      - name: Run API and desktop configuration tests
+        run: python -m pytest -q --junitxml=test-results.xml
+      - name: Save test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
+          if-no-files-found: ignore
+          retention-days: 14

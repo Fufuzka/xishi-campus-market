@@ -1,0 +1,45 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+*.zip
+build/
+dist/
+*.spec
+desktop-test/
+
+# 本机依赖和编辑器缓存
+venv/
+node_modules/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db
+
+# 用户数据与本地连接配置
+uploads/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.log
+*.log.*
+.env
+.env.*
+!.env.example
+config.local.json
+
+# 访问凭据与私钥
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+
+# 可重新生成的交付清单
+delivery-manifest.json

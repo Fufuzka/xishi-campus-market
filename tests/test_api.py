@@ -1,0 +1,131 @@
+import io
+import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
+from backend import main
+
+@pytest.fixture
+def clients(tmp_path, monkeypatch):
+    monkeypatch.setattr(main,'DATA',tmp_path)
+    main.init_db()
+    with TestClient(main.app) as a, TestClient(main.app) as b:
+        yield a,b
+
+def signup(c,name='student'):
+    r=c.post('/api/auth/register',json={'username':name,'password':'Campus2026!','nickname':'测试同学'})
+    assert r.status_code==201
+    return r.json()
+
+def payload(**kw):
+    return {'title':'测试高数教材','description':'保存完好的教材，含少量笔记。','price':'12.34','category':'教材书籍','image_url':'/assets/book.svg','contact':'wx:test','location':'图书馆门口','condition':'轻微使用',**kw}
+
+def publish(c):
+    r=c.post('/api/products',json=payload())
+    assert r.status_code==201
+    return r.json()['id']
+
+def test_auth_lifecycle(clients):
+    a,b=clients
+    assert a.get('/api/me').status_code==401
+    signup(a)
+    assert a.get('/api/me').json()['username']=='student'
+    assert a.post('/api/auth/register',json={'username':'student','password':'Campus2026!','nickname':'重复'}).status_code==409
+    assert a.post('/api/auth/logout').status_code==200
+    assert a.get('/api/me').status_code==401
+    assert a.post('/api/auth/login',json={'username':'student','password':'wrongpwd'}).status_code==401
+    r=a.post('/api/auth/login',json={'username':'student','password':'Campus2026!'})
+    assert r.status_code==200 and 'HttpOnly' in r.headers['set-cookie']
+
+def test_publish_permissions_and_contact_privacy(clients):
+    a,b=clients
+    assert b.post('/api/products',json=payload()).status_code==401
+    signup(a);pid=publish(a)
+    assert 'contact' not in b.get('/api/products').json()['items'][0]
+    assert b.get(f'/api/products/{pid}').json()['contact']=='登录后查看联系方式'
+    signup(b,'other')
+    assert b.put(f'/api/products/{pid}',json=payload()).status_code==403
+    assert b.patch(f'/api/products/{pid}/status',json={'status':'sold'}).status_code==403
+    assert a.put(f'/api/products/{pid}',json=payload(title='修改后的教材')).status_code==200
+    assert b.get(f'/api/products/{pid}').json()['title']=='修改后的教材'
+    assert a.get('/api/me/products').json()[0]['contact']=='wx:test'
+
+@pytest.mark.parametrize('changes',[{'price':-1},{'price':'0.001'},{'price':'NaN'},{'price':1000000},{'category':'非法分类'},{'image_url':'javascript:alert(1)'},{'image_url':'//evil.com/x.jpg'},{'title':'  '},{'description':'x'}])
+def test_validation(clients,changes):
+    a,_=clients;signup(a)
+    assert a.post('/api/products',json=payload(**changes)).status_code==422
+
+def test_search_filter_sort_pagination(clients):
+    a,b=clients;signup(a)
+    publish(a)
+    a.post('/api/products',json=payload(title='线性代数课本',price='30'))
+    a.post('/api/products',json=payload(title='无线耳机',price='100',category='数码电子'))
+    assert b.get('/api/products?q=笔记').json()['total']==3
+    assert b.get('/api/products?q=高数&category=教材书籍&min_price=12&max_price=13').json()['total']==1
+    assert b.get('/api/products?sort=price_desc&page_size=1&page=2').json()['items'][0]['price']==30
+    assert b.get('/api/products?q=%27%20OR%201=1--').json()['total']==0
+    assert b.get('/api/products?min_price=50&max_price=1').status_code==422
+    assert b.get('/api/products?page=0').status_code==422
+    assert b.get('/api/products?page_size=1000').status_code==422
+
+def test_status_machine_and_visibility(clients):
+    a,b=clients;signup(a);pid=publish(a);signup(b,'buyer')
+    path=f'/api/products/{pid}'
+    assert a.patch(path+'/status',json={'status':'off_shelf'}).status_code==200
+    assert b.get('/api/products').json()['total']==0
+    assert b.post(path+'/messages',json={'content':'还在吗'}).status_code==409
+    assert a.patch(path+'/status',json={'status':'on_sale'}).status_code==200
+    assert a.patch(path+'/status',json={'status':'sold'}).status_code==200
+    assert a.patch(path+'/status',json={'status':'on_sale'}).status_code==409
+    assert b.get(path).json()['status']=='sold'
+
+def test_favorites_idempotent_and_user_isolation(clients):
+    a,b=clients;signup(a);pid=publish(a);signup(b,'buyer')
+    for _ in range(2):assert b.put(f'/api/products/{pid}/favorite').status_code==200
+    assert len(b.get('/api/me/favorites').json())==1
+    assert len(a.get('/api/me/favorites').json())==0
+    for _ in range(2):assert b.delete(f'/api/products/{pid}/favorite').status_code==200
+    assert b.get('/api/me/favorites').json()==[]
+
+def test_messages_seller_replies_and_parent_validation(clients):
+    a,b=clients;signup(a);pid=publish(a);signup(b,'buyer')
+    path=f'/api/products/{pid}/messages'
+    mid=b.post(path,json={'content':'可以便宜点吗？'}).json()['id']
+    assert b.post(path,json={'content':'伪造卖家回复','parent_id':mid}).status_code==403
+    assert a.post(path,json={'content':'可以面交商量','parent_id':mid}).status_code==201
+    other=publish(a)
+    assert a.post(f'/api/products/{other}/messages',json={'content':'跨商品回复','parent_id':mid}).status_code==422
+    assert b.post(path,json={'content':'   '}).status_code==422
+    assert len(b.get(path).json())==2
+
+def test_upload_validation(clients):
+    a,b=clients
+    assert b.post('/api/uploads',files={'file':('x.png',b'fake','image/png')}).status_code==401
+    signup(a)
+    assert a.post('/api/uploads',files={'file':('x.png',b'fake','image/png')}).status_code==422
+    assert a.post('/api/uploads',files={'file':('x.svg',b'<svg/>','image/svg+xml')}).status_code==422
+    assert a.post('/api/uploads',files={'file':('big.jpg',b'x'*(5*1024*1024+1),'image/jpeg')}).status_code==413
+    image=io.BytesIO();Image.new('RGB',(20,20)).save(image,'PNG')
+    r=a.post('/api/uploads',files={'file':('../../x.png',image.getvalue(),'image/png')})
+    assert r.status_code==201 and r.json()['url'].endswith('.jpg')
+    assert '..' not in r.json()['url']
+
+def test_cross_origin_and_static_isolation(clients):
+    a,b=clients;signup(a)
+    assert a.post('/api/products',json=payload(),headers={'Origin':'https://evil.test'}).status_code==403
+    for path in ['/data/market.db','/backend/main.py','/.env']:
+        assert b.get(path).status_code==404
+    assert b.get('/').status_code==200
+    assert b.get('/api/health').json()['status']=='ok'
+    assert b.get('/api/products/9999').status_code==404
+    assert 'password_hash' not in a.get('/api/me').text
+
+def test_expired_session(clients):
+    a,b=clients;signup(a)
+    with main.db() as c:c.execute('UPDATE sessions SET expires_at=0')
+    assert a.get('/api/me').status_code==401
+
+def test_money_precision(clients):
+    a,b=clients;signup(a)
+    pid=a.post('/api/products',json=payload(price='0.29')).json()['id']
+    assert b.get(f'/api/products/{pid}').json()['price']==0.29
+    with main.db() as c:assert c.execute('SELECT price_cents FROM products WHERE id=?',(pid,)).fetchone()[0]==29

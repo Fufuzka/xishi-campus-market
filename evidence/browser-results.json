@@ -1,0 +1,58 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "密码显示隐藏与重新打开复位",
+      "result": "PASS"
+    },
+    {
+      "name": "应用侧栏与帮助入口",
+      "result": "PASS"
+    },
+    {
+      "name": "关键词与价格筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "注册与登录状态",
+      "result": "PASS"
+    },
+    {
+      "name": "图片上传与商品发布",
+      "result": "PASS"
+    },
+    {
+      "name": "商品编辑",
+      "result": "PASS"
+    },
+    {
+      "name": "商品下架与重新上架",
+      "result": "PASS"
+    },
+    {
+      "name": "收藏商品",
+      "result": "PASS"
+    },
+    {
+      "name": "买家留言",
+      "result": "PASS"
+    },
+    {
+      "name": "取消收藏",
+      "result": "PASS"
+    },
+    {
+      "name": "售出确认与状态更新",
+      "result": "PASS"
+    },
+    {
+      "name": "卖家回复买家留言",
+      "result": "PASS"
+    },
+    {
+      "name": "移动端无横向溢出",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}

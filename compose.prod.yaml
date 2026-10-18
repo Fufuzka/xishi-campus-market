@@ -1,0 +1,22 @@
+# docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+services:
+  app:
+    environment:
+      COOKIE_SECURE: "1"
+  proxy:
+    image: caddy:2.10.0-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MARKET_DOMAIN: ${MARKET_DOMAIN:?请先设置已解析到服务器的域名}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+volumes:
+  caddy-data:
+  caddy-config:

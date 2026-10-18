@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "packaged_window_verified": true,
+  "native_settings_verified": true,
+  "test_connection_succeeded": true,
+  "switched_to_other_service": true,
+  "switched_back_to_local": true,
+  "original_local_product_count": 8,
+  "service_port_released_after_exit": true,
+  "public_https_server_tested": false
+}

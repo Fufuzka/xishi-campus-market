@@ -1,0 +1,7 @@
+{$MARKET_DOMAIN} {
+    encode gzip
+    request_body {
+        max_size 6MB
+    }
+    reverse_proxy app:8000
+}
