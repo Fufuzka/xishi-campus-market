@@ -6,6 +6,10 @@
 
 源码、设计文档和测试材料通过 Git 管理；用户数据库、上传图片、日志、环境和构建产物不入库。Windows 便携包通过私有仓库 Release 管理。日常提交、自动测试与发布说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+- 私有仓库：[Fufuzka/xishi-campus-market](https://github.com/Fufuzka/xishi-campus-market)
+- Windows 下载：[v1.2.0 Release](https://github.com/Fufuzka/xishi-campus-market/releases/tag/v1.2.0)
+- 自动测试：[GitHub Actions](https://github.com/Fufuzka/xishi-campus-market/actions)
+
 ## Windows 桌面版
 
 1.2.0 新增密码显示 / 隐藏按钮，主界面改为固定侧栏、顶部工具栏和紧凑商品工作区。详见 [11-界面改版与密码可见性](docs/11-界面改版与密码可见性.md)。
