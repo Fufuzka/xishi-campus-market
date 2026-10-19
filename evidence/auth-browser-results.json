@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "关闭按钮清空用户名密码并复位密码可见性",
+      "result": "PASS"
+    },
+    {
+      "name": "Escape 关闭后清空输入",
+      "result": "PASS"
+    },
+    {
+      "name": "点击遮罩关闭后清空输入",
+      "result": "PASS"
+    },
+    {
+      "name": "退出注册后清空昵称并返回空白登录表单",
+      "result": "PASS"
+    },
+    {
+      "name": "网络断开显示中文提示且允许重试",
+      "result": "PASS"
+    },
+    {
+      "name": "服务恢复可登录且退出后登录表单为空",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}
