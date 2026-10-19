@@ -13,7 +13,7 @@ git commit -m "完善商品列表交互"
 git push
 ```
 
-首次从其他电脑使用：克隆仓库，安装 Python 3.12，按 README 启动。桌面软件打包另按 requirements-desktop.txt 与 scripts/build-desktop.ps1 执行。
+首次从其他电脑使用：克隆仓库，安装 Python 3.12，按 README 启动。在浏览器打开服务地址进行测试。
 
 ## 检查与自动测试
 
@@ -22,7 +22,7 @@ python -m pytest -q
 node --check frontend/app.js
 ```
 
-main 推送和 Pull Request 会触发 GitHub Actions，执行 JavaScript 语法及 API / 桌面配置测试。该工作流不会启动图形窗口，不做公网部署，不替代真实 EXE 或浏览器验收。已有截图与结果是历史验收材料，代码变动后应按影响范围更新。
+main 推送和 Pull Request 会触发 GitHub Actions，执行 JavaScript 语法及 API 测试。该工作流不会启动图形窗口，不做公网部署，不替代浏览器验收。已有截图与结果是历史验收材料，代码变动后应按影响范围更新。
 
 ## 不纳入 Git 的文件
 
@@ -30,11 +30,13 @@ main 推送和 Pull Request 会触发 GitHub Actions，执行 JavaScript 语法�
 
 提交前检查 `git status` 和 `git diff --cached`，确认没有真实账号、密码、Cookie、访问令牌或用户数据。无需把 Python 虚拟环境和生成的安装包放进仓库。
 
-## 软件版本发布
+## 测试版管理
 
-1. 完成并验证改动，更新桌面版本、说明和相关测试证据。
-2. 运行打包脚本，在本机检查 EXE 和生成的便携包。
-3. 在私有仓库创建对应版本的 Release，上传 ZIP 与 SHA-256 校验文件。
-4. 发布的是私有仓库资产，不会改变代码仓库的可见性。
+当前为网页测试版 0.1.0-beta.1。后续用 beta 编号记录迭代，例如 0.1.0-beta.2；未经用户明确确认，不标为正式版，不创建稳定版发布。
 
-不要提交公网服务器凭据。未来若引入自动部署或自动发布，使用仓库 Secrets 或受限工作流，不把密钥写入代码。
+1. 完成改动，运行 API 与浏览器验收，更新实际证据和文档。
+2. 代码通过 Git 提交管理；每次修改不必创建 Release。
+3. 如需保存测试节点，标签包含 beta；GitHub Release 必须勾选 Pre-release，不上传 EXE。
+4. 未来部署到服务器后，仍在浏览器验收并保持测试版标识，公网部署不等于正式发布。
+
+不要提交公网服务器凭据。部署凭据使用受限 Secrets，不把密钥写入代码。

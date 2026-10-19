@@ -1,4 +1,4 @@
-// 搜索 1.3 专项验收；只对隔离的本地演示服务执行，会新增验收商品。
+// 网页测试版搜索专项验收；只对隔离的本地演示服务执行，会新增验收商品。
 const {chromium}=require('playwright');
 const fs=require('fs');const path=require('path');
 (async()=>{
@@ -15,7 +15,7 @@ const fs=require('fs');const path=require('path');
  const search=async(term)=>{await input().fill(term);await input().press('Enter');await page.waitForFunction(t=>document.querySelector('.results-caption')?.textContent.includes('“'+t+'”'),term);await waitHistory(term)};
  const discovery=async()=>{await input().fill('');await input().click();await page.getByText('可能想搜',{exact:true}).waitFor()};
  try{
- await page.goto(base+'/?desktop=1&mode=local');await page.locator('.product-card').first().waitFor();
+ await page.goto(base);await page.locator('.product-card').first().waitFor();
  await check('可能想搜使用真实在售商品',async()=>{await discovery();await page.locator('.recommendation-chips').getByRole('button',{name:'键盘 ↗',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.results-caption')?.textContent.includes('“键盘”'));await waitHistory('键盘')});
  await check('历史记录去重并按最近搜索置顶',async()=>{await search('耳机');await search('键盘');const h=await history();if(h.items[0]!=='键盘'||h.items.filter(t=>t==='键盘').length!==1)throw Error('历史去重或排序失败：'+JSON.stringify(h));await discovery();await page.locator('.history-chips').getByRole('button',{name:'键盘',exact:true}).waitFor();await shot('10-search-discovery')});
  await check('历史点击直接复用',async()=>{await page.locator('.history-chips').getByRole('button',{name:'耳机',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.results-caption')?.textContent.includes('“耳机”'))});

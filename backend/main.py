@@ -57,7 +57,7 @@ async def lifespan(app):
     init_db()
     yield
 
-app = FastAPI(title='校园集市 API', version='1.3.0', lifespan=lifespan)
+app = FastAPI(title='校园集市 API', version='0.1.0-beta.1', lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(request, exc):
@@ -140,7 +140,7 @@ def me(user=Depends(current_user)):
 def health():
     with db() as c:
         c.execute('SELECT 1')
-    return {'status': 'ok', 'version': '1.3.0'}
+    return {'status': 'ok', 'version': '0.1.0-beta.1'}
 
 @app.get('/api/categories', tags=['商品'])
 def categories():
