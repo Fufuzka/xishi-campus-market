@@ -951,6 +951,125 @@
         }
       }
     },
+    "/api/verification-images": {
+      "post": {
+        "tags": [
+          "学生认证"
+        ],
+        "summary": "Upload Proof",
+        "operationId": "upload_proof_api_verification_images_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_proof_api_verification_images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/verification-images/{name}": {
+      "get": {
+        "tags": [
+          "学生认证"
+        ],
+        "summary": "Proof Image",
+        "operationId": "proof_image_api_verification_images__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{oid}/conversation": {
+      "post": {
+        "tags": [
+          "私聊"
+        ],
+        "summary": "Order Conversation",
+        "operationId": "order_conversation_api_orders__oid__conversation_post",
+        "parameters": [
+          {
+            "name": "oid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/verification": {
       "get": {
         "tags": [
@@ -2014,6 +2133,20 @@
         ],
         "title": "Body_upload_api_uploads_post"
       },
+      "Body_upload_proof_api_verification_images_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_proof_api_verification_images_post"
+      },
       "CategoryInput": {
         "properties": {
           "name": {
@@ -2189,8 +2322,24 @@
           "image_url": {
             "type": "string",
             "maxLength": 600,
-            "minLength": 1,
-            "title": "Image Url"
+            "title": "Image Url",
+            "default": ""
+          },
+          "image_urls": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Urls"
           },
           "contact": {
             "type": "string",
@@ -2238,7 +2387,6 @@
           "description",
           "price",
           "category",
-          "image_url",
           "contact",
           "location"
         ],
@@ -2446,13 +2594,23 @@
             "maxLength": 80,
             "minLength": 2,
             "title": "College"
+          },
+          "image_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Image Urls"
           }
         },
         "type": "object",
         "required": [
           "real_name",
           "student_no",
-          "college"
+          "college",
+          "image_urls"
         ],
         "title": "Verification"
       },

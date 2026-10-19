@@ -3,6 +3,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 import sqlite3
+import json
+from fastapi import UploadFile, File
+from fastapi.responses import FileResponse
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
@@ -12,10 +15,10 @@ def migrate(c, categories):
         'users': {'role': "TEXT NOT NULL DEFAULT 'student'", 'disabled': 'INTEGER NOT NULL DEFAULT 0',
                   'verification': "TEXT NOT NULL DEFAULT 'unverified'", 'real_name': "TEXT NOT NULL DEFAULT ''",
                   'student_no': "TEXT NOT NULL DEFAULT ''", 'college': "TEXT NOT NULL DEFAULT ''",
-                  'verification_note': "TEXT NOT NULL DEFAULT ''"},
+                  'verification_note': "TEXT NOT NULL DEFAULT ''", 'verification_images': "TEXT NOT NULL DEFAULT '[]'"},
         'products': {'campus': "TEXT NOT NULL DEFAULT '主校区'", 'trade_method': "TEXT NOT NULL DEFAULT '当面交易'",
                      'review_status': "TEXT NOT NULL DEFAULT 'pending'", 'review_note': "TEXT NOT NULL DEFAULT ''",
-                     'deleted': 'INTEGER NOT NULL DEFAULT 0'},
+                     'deleted': 'INTEGER NOT NULL DEFAULT 0', 'image_urls': "TEXT NOT NULL DEFAULT '[]'"},
     }
     for table, columns in additions.items():
         present = {r[1] for r in c.execute(f'PRAGMA table_info({table})')}
@@ -23,6 +26,7 @@ def migrate(c, categories):
             if name not in present:
                 c.execute(f'ALTER TABLE {table} ADD COLUMN {name} {declaration}')
     c.executescript('''
+    CREATE TABLE IF NOT EXISTS verification_uploads(name TEXT PRIMARY KEY,owner_id INTEGER NOT NULL REFERENCES users(id));
     CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS wanted(
       id INTEGER PRIMARY KEY,owner_id INTEGER NOT NULL REFERENCES users(id),title TEXT NOT NULL,
@@ -70,6 +74,7 @@ class Verification(TextModel):
     real_name: str = Field(min_length=2,max_length=30)
     student_no: str = Field(min_length=4,max_length=32,pattern=r'^[A-Za-z0-9-]+$')
     college: str = Field(min_length=2,max_length=80)
+    image_urls: list[str] = Field(min_length=1,max_length=3)
 
 
 class Review(TextModel):
@@ -159,10 +164,38 @@ def install(app, b):
             raise HTTPException(404,'订单不存在')
         return row
 
+
+    @app.post('/api/verification-images',status_code=201,tags=['学生认证'])
+    async def upload_proof(file:UploadFile=File(...),user=Depends(b.current_user)):
+        raw=await file.read(5*1024*1024+1)
+        if len(raw)>5*1024*1024:raise HTTPException(413,'图片不能超过 5 MB')
+        name=b.save_image(raw,b.DATA/'verification-images')
+        with b.db() as c:c.execute('INSERT INTO verification_uploads(name,owner_id) VALUES(?,?)',(name,user['id']))
+        return {'url':'/api/verification-images/'+name}
+
+    @app.get('/api/verification-images/{name}',tags=['学生认证'])
+    def proof_image(name:str,user=Depends(b.current_user)):
+        with b.db() as c:
+            row=c.execute('SELECT owner_id FROM verification_uploads WHERE name=?',(name,)).fetchone()
+            if not row or (row['owner_id']!=user['id'] and user['role']!='admin'):raise HTTPException(404,'图片不存在')
+        file=b.DATA/'verification-images'/name
+        if not file.is_file():raise HTTPException(404,'图片不存在')
+        return FileResponse(file,media_type='image/jpeg',headers={'Cache-Control':'no-store'})
+
+    @app.post('/api/orders/{oid}/conversation',tags=['私聊'])
+    def order_conversation(oid:int,user=Depends(verified)):
+        with b.db() as c:
+            c.execute('BEGIN IMMEDIATE');row=order(c,oid,user)
+            c.execute('INSERT OR IGNORE INTO conversations(starter_id,recipient_id,product_id) VALUES(?,?,?)',(row['buyer_id'],row['seller_id'],row['product_id']))
+            cid=c.execute('SELECT id FROM conversations WHERE starter_id=? AND recipient_id=? AND product_id=?',(row['buyer_id'],row['seller_id'],row['product_id'])).fetchone()[0]
+        return {'id':cid}
+
     @app.get('/api/me/verification',tags=['学生认证'])
     def get_verification(user=Depends(b.current_user)):
         with b.db() as c:
-            return dict(c.execute('SELECT verification,real_name,student_no,college,verification_note FROM users WHERE id=?',(user['id'],)).fetchone())
+            row=dict(c.execute('SELECT verification,real_name,student_no,college,verification_note,verification_images FROM users WHERE id=?',(user['id'],)).fetchone())
+            row['image_urls']=json.loads(row.pop('verification_images'))
+            return row
 
     @app.post('/api/me/verification',tags=['学生认证'])
     def submit_verification(p:Verification,user=Depends(b.current_user)):
@@ -171,8 +204,11 @@ def install(app, b):
             state=c.execute('SELECT verification FROM users WHERE id=?',(user['id'],)).fetchone()[0]
             if state in ('pending','approved'):
                 raise HTTPException(409,'资料正在审核或已通过，不可重复提交')
+            if len(set(p.image_urls))!=len(p.image_urls):raise HTTPException(422,'不能提交重复图片')
+            for url in p.image_urls:
+                if not url.startswith('/api/verification-images/') or not c.execute('SELECT 1 FROM verification_uploads WHERE name=? AND owner_id=?',(url.removeprefix('/api/verification-images/'),user['id'])).fetchone():raise HTTPException(422,'请上传本人的认证证明图片')
             try:
-                c.execute("UPDATE users SET real_name=?,student_no=?,college=?,verification='pending',verification_note='' WHERE id=?",(p.real_name,p.student_no,p.college,user['id']))
+                c.execute("UPDATE users SET real_name=?,student_no=?,college=?,verification_images=?,verification='pending',verification_note='' WHERE id=?",(p.real_name,p.student_no,p.college,json.dumps(p.image_urls),user['id']))
             except sqlite3.IntegrityError:
                 raise HTTPException(409,'该学号已有认证申请')
         return {'ok':True}
@@ -267,6 +303,7 @@ def install(app, b):
             try:
                 oid=c.execute('INSERT INTO orders(product_id,buyer_id,seller_id,price_cents,title) VALUES(?,?,?,?,?)',(row['id'],user['id'],row['owner_id'],row['price_cents'],row['title'])).lastrowid
             except sqlite3.IntegrityError:raise HTTPException(409,'该商品已有进行中的交易约定')
+            c.execute('INSERT OR IGNORE INTO conversations(starter_id,recipient_id,product_id) VALUES(?,?,?)',(user['id'],row['owner_id'],row['id']))
         return {'id':oid}
 
     @app.get('/api/orders',tags=['线下订单'])
@@ -337,7 +374,7 @@ def install(app, b):
 
     @app.get('/api/admin/verifications',tags=['管理'])
     def verifications(user=Depends(admin)):
-        with b.db() as c:return [dict(x) for x in c.execute("SELECT id,username,nickname,real_name,student_no,college,verification,verification_note FROM users WHERE verification!='unverified' ORDER BY CASE WHEN verification='pending' THEN 0 ELSE 1 END,id DESC")]
+        with b.db() as c:return [{**dict(x),'image_urls':json.loads(x['verification_images'])} for x in c.execute("SELECT id,username,nickname,real_name,student_no,college,verification,verification_note,verification_images FROM users WHERE verification!='unverified' ORDER BY CASE WHEN verification='pending' THEN 0 ELSE 1 END,id DESC")]
 
     @app.patch('/api/admin/verifications/{uid}',tags=['管理'])
     def review_verification(uid:int,p:Review,user=Depends(admin)):

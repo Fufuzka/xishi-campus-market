@@ -4,6 +4,7 @@ from pathlib import Path
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal
 from io import BytesIO
+import json
 import hashlib
 import hmac
 import os
@@ -16,7 +17,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Response, UploadFi
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from PIL import Image, UnidentifiedImageError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,7 +163,8 @@ class ProductInput(BaseModel):
     description: str = Field(min_length=5, max_length=3000)
     price: Decimal = Field(ge=0, le=999999, decimal_places=2, allow_inf_nan=False)
     category: str
-    image_url: str = Field(min_length=1, max_length=600)
+    image_url: str = Field(default='',max_length=600)
+    image_urls: list[str] | None = Field(None,min_length=1,max_length=3)
     contact: str = Field(min_length=2, max_length=100)
     location: str = Field(min_length=2, max_length=80)
     condition: Literal['全新', '几乎全新', '轻微使用', '正常使用'] = '轻微使用'
@@ -195,8 +197,18 @@ class ProductInput(BaseModel):
             return value
         raise ValueError('请上传图片或使用 HTTPS 图片 URL')
 
+    @model_validator(mode='after')
+    def images_check(self):
+        images=self.image_urls if self.image_urls is not None else [self.image_url]
+        if not 1<=len(images)<=3 or len(set(images))!=len(images):
+            raise ValueError('请提交 1–3 张不同的商品图片')
+        self.image_urls=[self.image_check(url) for url in images]
+        self.image_url=self.image_urls[0]
+        return self
+
 def product_dict(row, include_contact=False):
     result = dict(row)
+    result['image_urls']=json.loads(result.get('image_urls') or '[]') or [result['image_url']]
     result['price'] = result.pop('price_cents') / 100
     if not include_contact:
         result.pop('contact', None)
@@ -350,7 +362,7 @@ def detail(pid: int, request: Request):
 def create_product(p: ProductInput, user=Depends(current_user)):
     require_verified(user)
     with db() as c:
-        pid = c.execute('INSERT INTO products(owner_id,title,description,price_cents,category,image_url,contact,location,condition,campus,trade_method) VALUES(?,?,?,?,?,?,?,?,?,?,?)', (user['id'],p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method)).lastrowid
+        pid = c.execute('INSERT INTO products(owner_id,title,description,price_cents,category,image_url,contact,location,condition,campus,trade_method,image_urls) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)', (user['id'],p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method,json.dumps(p.image_urls))).lastrowid
     return {'id': pid}
 
 @app.put('/api/products/{pid}', tags=['商品'])
@@ -361,7 +373,7 @@ def edit_product(pid: int, p: ProductInput, user=Depends(current_user)):
         owned(c,pid,user)
         if c.execute("SELECT 1 FROM orders WHERE product_id=? AND status IN ('pending_communication','pending_trade')",(pid,)).fetchone():
             raise HTTPException(409, '进行中的交易商品不能编辑')
-        c.execute("UPDATE products SET title=?,description=?,price_cents=?,category=?,image_url=?,contact=?,location=?,condition=?,campus=?,trade_method=?,review_status='pending',review_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?", (p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method,pid))
+        c.execute("UPDATE products SET title=?,description=?,price_cents=?,category=?,image_url=?,contact=?,location=?,condition=?,campus=?,trade_method=?,image_urls=?,review_status='pending',review_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?", (p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method,json.dumps(p.image_urls),pid))
     return {'ok': True}
 
 class StatusInput(BaseModel):
@@ -433,6 +445,9 @@ async def upload(file: UploadFile = File(...), user=Depends(current_user)):
     raw = await file.read(5 * 1024 * 1024 + 1)
     if len(raw) > 5 * 1024 * 1024:
         raise HTTPException(413, '图片不能超过 5 MB')
+    return {'url': '/uploads/' + save_image(raw, DATA / 'uploads')}
+
+def save_image(raw, directory):
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('error', Image.DecompressionBombWarning)
@@ -445,8 +460,9 @@ async def upload(file: UploadFile = File(...), user=Depends(current_user)):
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise HTTPException(422, '请上传有效的 JPG、PNG 或 WebP 图片（最多 2000 万像素）')
     name = secrets.token_hex(16) + '.jpg'
-    image.save(DATA / 'uploads' / name, 'JPEG', quality=85)
-    return {'url': '/uploads/' + name}
+    directory.mkdir(parents=True,exist_ok=True)
+    image.save(directory / name, 'JPEG', quality=85)
+    return name
 
 import sys
 from backend.campus import install
@@ -473,3 +489,7 @@ def style():
 @app.get('/campus.js', include_in_schema=False)
 def campus_script():
     return FileResponse(ROOT / 'frontend/campus.js', media_type='text/javascript')
+
+@app.get('/experience.js', include_in_schema=False)
+def experience_script():
+    return FileResponse(ROOT / 'frontend/experience.js', media_type='text/javascript')

@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 import sqlite3
+import io
+from PIL import Image
 import pytest
 from fastapi.testclient import TestClient
 from backend import main
@@ -20,9 +22,16 @@ def env(tmp_path,monkeypatch):
         yield admin,seller,buyer,outsider
 
 
+def proof(client):
+    data=io.BytesIO();Image.new('RGB',(20,20),(100,150,100)).save(data,'PNG')
+    result=client.post('/api/verification-images',files={'file':('proof.png',data.getvalue(),'image/png')})
+    assert result.status_code==201,result.text
+    return [result.json()['url']]
+
+
 def verify(admin,client,number):
     uid=client.get('/api/me').json()['id']
-    r=client.post('/api/me/verification',json={'real_name':'测试学生','student_no':number,'college':'计算机学院'})
+    r=client.post('/api/me/verification',json={'real_name':'测试学生','student_no':number,'college':'计算机学院','image_urls':proof(client)})
     assert r.status_code==200,r.text
     assert admin.patch(f'/api/admin/verifications/{uid}',json={'status':'approved'}).status_code==200
     return uid
@@ -46,13 +55,13 @@ def test_verification_gates_and_private_identity(env):
     assert all(k not in public for k in ['real_name','student_no','college','password_hash'])
     assert buyer.get('/api/admin/verifications').status_code==403
     assert 'S1234' not in buyer.get('/api/products').text
-    assert seller.post('/api/me/verification',json={'real_name':'新姓名','student_no':'S2222','college':'文学学院'}).status_code==409
-    assert buyer.post('/api/me/verification',json={'real_name':'他人姓名','student_no':'S1234','college':'文学学院'}).status_code==409
+    assert seller.post('/api/me/verification',json={'real_name':'新姓名','student_no':'S2222','college':'文学学院','image_urls':proof(buyer)}).status_code==409
+    assert buyer.post('/api/me/verification',json={'real_name':'他人姓名','student_no':'S1234','college':'文学学院','image_urls':proof(buyer)}).status_code==409
 
 
 def test_rejected_verification_can_resubmit(env):
     admin,seller,_,_=env;uid=seller.get('/api/me').json()['id']
-    data={'real_name':'测试学生','student_no':'S1002','college':'计算机学院'}
+    data={'real_name':'测试学生','student_no':'S1002','college':'计算机学院','image_urls':proof(seller)}
     seller.post('/api/me/verification',json=data)
     assert admin.patch(f'/api/admin/verifications/{uid}',json={'status':'rejected'}).status_code==422
     assert admin.patch(f'/api/admin/verifications/{uid}',json={'status':'rejected','note':'请核对学院名称'}).status_code==200
@@ -192,3 +201,54 @@ def test_legacy_database_migration_is_repeatable(tmp_path,monkeypatch):
         row=c.execute('SELECT * FROM products').fetchone()
         assert row['title']=='旧商品' and row['review_status']=='pending' and row['campus']=='主校区'
         assert c.execute('SELECT verification,role FROM users').fetchone()[:]==('unverified','student')
+
+
+@pytest.mark.parametrize('count',[1,2,3])
+def test_product_supports_one_to_three_images(env,count):
+    admin,seller,buyer,_=env;verify(admin,seller,'MULTI001')
+    data=product();data.pop('image_url');data['image_urls']=['/assets/book.svg','/assets/lamp.svg','/assets/keyboard.svg'][:count]
+    response=seller.post('/api/products',json=data);assert response.status_code==201,response.text
+    pid=response.json()['id']
+    row=seller.get(f'/api/products/{pid}').json()
+    assert row['image_urls']==data['image_urls'] and row['image_url']==data['image_urls'][0]
+    assert admin.get('/api/admin/products').json()[0]['image_urls']==data['image_urls']
+    admin.patch(f'/api/admin/products/{pid}',json={'status':'approved'})
+    assert buyer.get(f'/api/products/{pid}').json()['image_urls']==data['image_urls']
+
+
+@pytest.mark.parametrize('images',[[],['/assets/book.svg']*4,['/assets/book.svg']*2,['javascript:alert(1)']])
+def test_product_image_count_duplicates_and_url_validation(env,images):
+    admin,seller,_,_=env;verify(admin,seller,'MULTI002')
+    data=product();data['image_urls']=images
+    assert seller.post('/api/products',json=data).status_code==422
+
+
+def test_proof_images_are_private_and_owned(env):
+    admin,seller,buyer,_=env
+    urls=proof(seller)+proof(seller)+proof(seller)
+    assert seller.get(urls[0]).status_code==200
+    assert seller.get(urls[0]).headers['cache-control']=='no-store'
+    assert admin.get(urls[0]).status_code==200
+    assert buyer.get(urls[0]).status_code==404
+    with TestClient(main.app) as guest:
+        assert guest.get(urls[0]).status_code==401
+        assert guest.get(urls[0].replace('/api/verification-images/','/verification-images/')).status_code==404
+    payload={'real_name':'测试学生','student_no':'PROOF001','college':'测试学院','image_urls':urls}
+    assert buyer.post('/api/me/verification',json=payload).status_code==422
+    assert seller.post('/api/me/verification',json={**payload,'image_urls':[]}).status_code==422
+    assert seller.post('/api/me/verification',json={**payload,'image_urls':urls+[urls[0]]}).status_code==422
+    assert seller.post('/api/me/verification',json=payload).status_code==200
+    assert seller.get('/api/me/verification').json()['image_urls']==urls
+    assert admin.get('/api/admin/verifications').json()[0]['image_urls']==urls
+
+
+def test_order_creates_conversation_and_retains_it_after_deletion(env):
+    admin,seller,buyer,outsider=env;pid=approved_product(admin,seller);verify(admin,buyer,'THREAD001')
+    oid=buyer.post('/api/orders',json={'product_id':pid}).json()['id']
+    chats=buyer.get('/api/conversations').json();assert len(chats)==1
+    assert seller.get('/api/conversations').json()[0]['id']==chats[0]['id']
+    assert outsider.post(f'/api/orders/{oid}/conversation').status_code==403
+    assert buyer.post(f'/api/orders/{oid}/conversation').json()['id']==chats[0]['id']
+    buyer.post(f'/api/orders/{oid}/cancel');seller.delete(f'/api/products/{pid}')
+    assert seller.post(f'/api/orders/{oid}/conversation').json()['id']==chats[0]['id']
+    assert buyer.post(f"/api/conversations/{chats[0]['id']}/messages",json={'content':'记录仍然保留'}).status_code==201

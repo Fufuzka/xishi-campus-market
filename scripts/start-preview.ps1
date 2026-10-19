@@ -24,5 +24,5 @@ if ($Health -and $Health.status -eq 'ok' -and $Health.version -eq '0.2.0-beta.1'
 if ($LASTEXITCODE -ne 0) { throw '初始化测试数据失败。' }
 Write-Host "请在浏览器打开 $PreviewUrl"
 Write-Host '测试期间请保留这个窗口。关闭窗口或按 Ctrl+C 会停止测试服务。'
-& $PythonPath -m uvicorn backend.main:app --host 127.0.0.1 --port $Port
+& $PythonPath -m uvicorn backend.main:app --host 127.0.0.1 --port $Port --reload --reload-dir backend
 exit $LASTEXITCODE

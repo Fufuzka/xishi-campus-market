@@ -31,6 +31,8 @@ jobs:
         run: |
           node --check frontend/app.js
           node --check frontend/campus.js
+          node --check frontend/experience.js
+          node --check scripts/experience-browser-test.cjs
           node --check scripts/campus-browser-test.cjs
           node --check scripts/browser-helpers.cjs
           node --check scripts/auth-browser-test.cjs

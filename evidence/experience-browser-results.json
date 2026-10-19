@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "移除工作空间并合并导航入口",
+      "result": "PASS"
+    },
+    {
+      "name": "三种桌面布局可切换并保存",
+      "result": "PASS"
+    },
+    {
+      "name": "三种布局在手机和中等宽度均无溢出",
+      "result": "PASS"
+    },
+    {
+      "name": "商品上传数量限制与增删图片",
+      "result": "PASS"
+    },
+    {
+      "name": "认证可自由提交一到三张证明",
+      "result": "PASS"
+    },
+    {
+      "name": "管理员放大认证证明并切换图片",
+      "result": "PASS"
+    },
+    {
+      "name": "管理员查看商品三张图片及键盘切换",
+      "result": "PASS"
+    },
+    {
+      "name": "商品详情可以浏览全部图片",
+      "result": "PASS"
+    },
+    {
+      "name": "仅下单也自动建立会话且在聊天内显示交易卡",
+      "result": "PASS"
+    },
+    {
+      "name": "取消后重新约定仍可查看历史记录",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}
