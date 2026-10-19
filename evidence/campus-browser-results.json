@@ -1,0 +1,62 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "学生注册与认证前发布限制",
+      "result": "PASS"
+    },
+    {
+      "name": "提交学生资料等待人工认证",
+      "result": "PASS"
+    },
+    {
+      "name": "管理员在后台审核学生认证",
+      "result": "PASS"
+    },
+    {
+      "name": "发布含校区和交易方式的待审核商品",
+      "result": "PASS"
+    },
+    {
+      "name": "商品审核后公开并支持校区筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "商品私聊双向沟通",
+      "result": "PASS"
+    },
+    {
+      "name": "买家发起交易约定",
+      "result": "PASS"
+    },
+    {
+      "name": "卖家填写线下面交安排",
+      "result": "PASS"
+    },
+    {
+      "name": "交易双方分别确认后完成订单",
+      "result": "PASS"
+    },
+    {
+      "name": "学生发布求购并让卖家联系",
+      "result": "PASS"
+    },
+    {
+      "name": "举报商品并由管理员处理",
+      "result": "PASS"
+    },
+    {
+      "name": "管理员分类管理与操作留痕",
+      "result": "PASS"
+    },
+    {
+      "name": "删除个人商品保留历史订单",
+      "result": "PASS"
+    },
+    {
+      "name": "手机求购私信订单后台均无横向溢出",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}

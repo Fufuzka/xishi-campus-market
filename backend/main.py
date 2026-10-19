@@ -43,6 +43,8 @@ def init_db():
     (DATA / 'uploads').mkdir(parents=True, exist_ok=True)
     with db() as c:
         c.executescript((ROOT / 'backend/schema.sql').read_text(encoding='utf-8'))
+        from backend.campus import migrate
+        migrate(c, CATEGORIES)
         c.execute('PRAGMA journal_mode=WAL')
 
 def hash_password(password, salt=None):
@@ -57,7 +59,7 @@ async def lifespan(app):
     init_db()
     yield
 
-app = FastAPI(title='校园集市 API', version='0.1.0-beta.1', lifespan=lifespan)
+app = FastAPI(title='校园集市 API', version='0.2.0-beta.1', lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(request, exc):
@@ -80,10 +82,16 @@ async def headers(request, call_next):
 def current_user(request: Request):
     token = request.cookies.get('market_session', '')
     with db() as c:
-        row = c.execute('SELECT u.id,u.username,u.nickname FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', (hashlib.sha256(token.encode()).hexdigest(), int(time.time()))).fetchone()
+        row = c.execute('SELECT u.id,u.username,u.nickname,u.role,u.disabled,u.verification FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', (hashlib.sha256(token.encode()).hexdigest(), int(time.time()))).fetchone()
     if row is None:
         raise HTTPException(401, '请先登录')
+    if row['disabled']:
+        raise HTTPException(403, '账号已停用')
     return dict(row)
+
+def require_verified(user):
+    if user['verification'] != 'approved':
+        raise HTTPException(403, '请先完成学生认证并等待审核通过')
 
 class Credentials(BaseModel):
     username: str = Field(min_length=3, max_length=30, pattern=r'^[A-Za-z0-9_]+$')
@@ -113,7 +121,7 @@ def register(payload: Registration, response: Response):
         except sqlite3.IntegrityError:
             raise HTTPException(409, '用户名已存在')
         issue_session(c, response, uid)
-    return {'id': uid, 'username': payload.username, 'nickname': payload.nickname}
+    return {'id': uid, 'username': payload.username, 'nickname': payload.nickname, 'role':'student', 'verification':'unverified'}
 
 @app.post('/api/auth/login', tags=['用户'])
 def login(payload: Credentials, response: Response):
@@ -122,8 +130,10 @@ def login(payload: Credentials, response: Response):
         valid = verify_password(payload.password, row['password_hash'] if row else '0' * 32 + ':' + '0' * 64)
         if not row or not valid:
             raise HTTPException(401, '用户名或密码错误')
+        if row['disabled']:
+            raise HTTPException(403, '账号已停用')
         issue_session(c, response, row['id'])
-    return {'id': row['id'], 'username': row['username'], 'nickname': row['nickname']}
+    return {k:row[k] for k in ('id','username','nickname','role','verification')}
 
 @app.post('/api/auth/logout', tags=['用户'])
 def logout(request: Request, response: Response):
@@ -140,11 +150,12 @@ def me(user=Depends(current_user)):
 def health():
     with db() as c:
         c.execute('SELECT 1')
-    return {'status': 'ok', 'version': '0.1.0-beta.1'}
+    return {'status': 'ok', 'version': '0.2.0-beta.1'}
 
 @app.get('/api/categories', tags=['商品'])
 def categories():
-    return CATEGORIES
+    with db() as c:
+        return [r[0] for r in c.execute('SELECT name FROM categories WHERE active=1 ORDER BY rowid')]
 
 class ProductInput(BaseModel):
     title: str = Field(min_length=2, max_length=80)
@@ -155,8 +166,10 @@ class ProductInput(BaseModel):
     contact: str = Field(min_length=2, max_length=100)
     location: str = Field(min_length=2, max_length=80)
     condition: Literal['全新', '几乎全新', '轻微使用', '正常使用'] = '轻微使用'
+    campus: str = Field(default='主校区',min_length=2,max_length=40)
+    trade_method: Literal['当面交易','校内自提'] = '当面交易'
 
-    @field_validator('title', 'description', 'contact', 'location')
+    @field_validator('title', 'description', 'contact', 'location', 'campus')
     @classmethod
     def trim(cls, value):
         if len(value.strip()) < 2:
@@ -166,8 +179,9 @@ class ProductInput(BaseModel):
     @field_validator('category')
     @classmethod
     def category_check(cls, value):
-        if value not in CATEGORIES:
-            raise ValueError('分类无效')
+        with db() as c:
+            if not c.execute('SELECT 1 FROM categories WHERE name=? AND active=1',(value,)).fetchone():
+                raise ValueError('分类无效或已停用')
         return value
 
     @field_validator('image_url')
@@ -188,7 +202,7 @@ def product_dict(row, include_contact=False):
         result.pop('contact', None)
     return result
 
-SELECT_PRODUCT = 'SELECT p.*,u.nickname AS seller FROM products p JOIN users u ON u.id=p.owner_id'
+SELECT_PRODUCT = 'SELECT p.*,u.nickname AS seller,u.disabled AS seller_disabled FROM products p JOIN users u ON u.id=p.owner_id'
 
 def search_owner(request, response):
     try:
@@ -245,26 +259,26 @@ def search_suggestions(q: str = Query('',max_length=100), limit: int = Query(8,g
         if term:
             tokens = list(dict.fromkeys(term.split()))
             clauses = ' AND '.join('instr(lower(title),lower(?))>0' for _ in tokens)
-            rows = c.execute("SELECT title FROM products WHERE status='on_sale' AND " + clauses + ' GROUP BY title ORDER BY CASE WHEN lower(title)=lower(?) THEN 0 WHEN instr(lower(title),lower(?))=1 THEN 1 ELSE 2 END,MAX(id) DESC LIMIT ?', tokens+[term,term,limit]).fetchall()
+            rows = c.execute("SELECT title FROM products WHERE status='on_sale' AND review_status='approved' AND deleted=0 AND owner_id IN (SELECT id FROM users WHERE disabled=0) AND " + clauses + ' GROUP BY title ORDER BY CASE WHEN lower(title)=lower(?) THEN 0 WHEN instr(lower(title),lower(?))=1 THEN 1 ELSE 2 END,MAX(id) DESC LIMIT ?', tokens+[term,term,limit]).fetchall()
             return {'items':[r['title'] for r in rows]}
         # 候选词只在确实存在匹配在售商品时展示，不伪造热搜次数。
         terms = ['教材','耳机','台灯','运动鞋','相机','帆布包','键盘','绿植','自行车','书桌','显示器','背包']
         result=[]
         for word in terms:
-            if c.execute("SELECT 1 FROM products WHERE status='on_sale' AND instr(title,?)>0 LIMIT 1",(word,)).fetchone():
+            if c.execute("SELECT 1 FROM products WHERE status='on_sale' AND review_status='approved' AND deleted=0 AND owner_id IN (SELECT id FROM users WHERE disabled=0) AND instr(title,?)>0 LIMIT 1",(word,)).fetchone():
                 result.append(word)
-        for row in c.execute("SELECT title FROM products WHERE status='on_sale' GROUP BY title ORDER BY MAX(id) DESC LIMIT 24"):
+        for row in c.execute("SELECT title FROM products WHERE status='on_sale' AND review_status='approved' AND deleted=0 AND owner_id IN (SELECT id FROM users WHERE disabled=0) GROUP BY title ORDER BY MAX(id) DESC LIMIT 24"):
             if row['title'] not in result:
                 result.append(row['title'])
     return {'items':result[:limit]}
 
 @app.get('/api/products', tags=['商品'])
-def products(q: str = Query('', max_length=100), category: str = '', min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc']='relevance', condition: Literal['全新','几乎全新','轻微使用','正常使用'] | None = None, published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
+def products(q: str = Query('', max_length=100), category: str = '', campus: str = Query('',max_length=40), min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc']='relevance', condition: Literal['全新','几乎全新','轻微使用','正常使用'] | None = None, published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
     if min_price > max_price:
         raise HTTPException(422, '最低价不能高于最高价')
     if published_within is not None and published_within not in (1,3,7,14):
         raise HTTPException(422, '发布时间仅支持 1、3、7、14 天内')
-    where = " WHERE p.status='on_sale' AND p.price_cents>=? AND p.price_cents<=?"
+    where = " WHERE p.status='on_sale' AND review_status='approved' AND deleted=0 AND owner_id IN (SELECT id FROM users WHERE disabled=0) AND p.price_cents>=? AND p.price_cents<=?"
     args = [int(min_price * 100), int(max_price * 100)]
     term = ' '.join(q.split())
     tokens = list(dict.fromkeys(term.split()))
@@ -274,6 +288,9 @@ def products(q: str = Query('', max_length=100), category: str = '', min_price: 
     if category:
         where += ' AND p.category=?'
         args.append(category)
+    if campus:
+        where += ' AND p.campus=?'
+        args.append(campus)
     if condition:
         where += ' AND p.condition=?'
         args.append(condition)
@@ -295,15 +312,15 @@ def products(q: str = Query('', max_length=100), category: str = '', min_price: 
 @app.get('/api/me/products', tags=['个人中心'])
 def my_products(user=Depends(current_user)):
     with db() as c:
-        return [product_dict(r, True) for r in c.execute(SELECT_PRODUCT + ' WHERE p.owner_id=? ORDER BY p.id DESC', (user['id'],))]
+        return [product_dict(r, True) for r in c.execute(SELECT_PRODUCT + ' WHERE p.owner_id=? AND p.deleted=0 ORDER BY p.id DESC', (user['id'],))]
 
 @app.get('/api/me/favorites', tags=['个人中心'])
 def my_favorites(user=Depends(current_user)):
     with db() as c:
-        return [product_dict(r) for r in c.execute(SELECT_PRODUCT + ' JOIN favorites f ON f.product_id=p.id WHERE f.user_id=? ORDER BY f.created_at DESC,p.id DESC', (user['id'],))]
+        return [product_dict(r) for r in c.execute(SELECT_PRODUCT + " JOIN favorites f ON f.product_id=p.id WHERE f.user_id=? AND p.deleted=0 AND p.review_status='approved' AND u.disabled=0 ORDER BY f.created_at DESC,p.id DESC", (user['id'],))]
 
 def get_product(c, pid):
-    row = c.execute(SELECT_PRODUCT + ' WHERE p.id=?', (pid,)).fetchone()
+    row = c.execute(SELECT_PRODUCT + ' WHERE p.id=? AND p.deleted=0', (pid,)).fetchone()
     if not row:
         raise HTTPException(404, '商品不存在')
     return row
@@ -323,21 +340,28 @@ def detail(pid: int, request: Request):
             user = current_user(request)
         except HTTPException:
             user = None
+        if (row['review_status']!='approved' or row['seller_disabled']) and (not user or (user['id']!=row['owner_id'] and user['role']!='admin')):
+            raise HTTPException(404, '商品不存在或尚未通过审核')
         result['contact'] = row['contact'] if user else '登录后查看联系方式'
         result['favorited'] = bool(user and c.execute('SELECT 1 FROM favorites WHERE user_id=? AND product_id=?', (user['id'], pid)).fetchone())
         return result
 
 @app.post('/api/products', status_code=201, tags=['商品'])
 def create_product(p: ProductInput, user=Depends(current_user)):
+    require_verified(user)
     with db() as c:
-        pid = c.execute('INSERT INTO products(owner_id,title,description,price_cents,category,image_url,contact,location,condition) VALUES(?,?,?,?,?,?,?,?,?)', (user['id'],p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition)).lastrowid
+        pid = c.execute('INSERT INTO products(owner_id,title,description,price_cents,category,image_url,contact,location,condition,campus,trade_method) VALUES(?,?,?,?,?,?,?,?,?,?,?)', (user['id'],p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method)).lastrowid
     return {'id': pid}
 
 @app.put('/api/products/{pid}', tags=['商品'])
 def edit_product(pid: int, p: ProductInput, user=Depends(current_user)):
+    require_verified(user)
     with db() as c:
+        c.execute('BEGIN IMMEDIATE')
         owned(c,pid,user)
-        c.execute('UPDATE products SET title=?,description=?,price_cents=?,category=?,image_url=?,contact=?,location=?,condition=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,pid))
+        if c.execute("SELECT 1 FROM orders WHERE product_id=? AND status IN ('pending_communication','pending_trade')",(pid,)).fetchone():
+            raise HTTPException(409, '进行中的交易商品不能编辑')
+        c.execute("UPDATE products SET title=?,description=?,price_cents=?,category=?,image_url=?,contact=?,location=?,condition=?,campus=?,trade_method=?,review_status='pending',review_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?", (p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method,pid))
     return {'ok': True}
 
 class StatusInput(BaseModel):
@@ -346,7 +370,14 @@ class StatusInput(BaseModel):
 @app.patch('/api/products/{pid}/status', tags=['商品'])
 def change_status(pid: int, p: StatusInput, user=Depends(current_user)):
     with db() as c:
+        c.execute('BEGIN IMMEDIATE')
         old = owned(c,pid,user)
+        if c.execute("SELECT 1 FROM orders WHERE product_id=? AND status IN ('pending_communication','pending_trade')",(pid,)).fetchone():
+            raise HTTPException(409, '请先结束进行中的订单')
+        if p.status=='on_sale':
+            require_verified(user)
+            if old['review_status']!='approved':
+                raise HTTPException(409, '商品需审核通过后才能上架')
         if old['status'] == 'sold' and p.status != 'sold':
             raise HTTPException(409, '已售商品不能重新上架，请重新发布')
         c.execute('UPDATE products SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?', (p.status,pid))
@@ -377,16 +408,16 @@ class MessageInput(BaseModel):
         return value.strip()
 
 @app.get('/api/products/{pid}/messages', tags=['留言'])
-def messages(pid: int):
+def messages(pid: int, request: Request):
+    detail(pid,request)
     with db() as c:
-        get_product(c,pid)
         return [dict(r) for r in c.execute('SELECT m.*,u.nickname FROM messages m JOIN users u ON u.id=m.user_id WHERE m.product_id=? ORDER BY m.id', (pid,))]
 
 @app.post('/api/products/{pid}/messages', status_code=201, tags=['留言'])
 def add_message(pid: int, p: MessageInput, user=Depends(current_user)):
     with db() as c:
         product = get_product(c,pid)
-        if product['status'] != 'on_sale':
+        if product['status'] != 'on_sale' or product['review_status']!='approved' or product['seller_disabled']:
             raise HTTPException(409, '商品已下架或售出，不能继续留言')
         if p.parent_id is not None:
             parent = c.execute('SELECT * FROM messages WHERE id=? AND product_id=?', (p.parent_id,pid)).fetchone()
@@ -417,6 +448,10 @@ async def upload(file: UploadFile = File(...), user=Depends(current_user)):
     image.save(DATA / 'uploads' / name, 'JPEG', quality=85)
     return {'url': '/uploads/' + name}
 
+import sys
+from backend.campus import install
+install(app, sys.modules[__name__])
+
 # 只挂载前端和上传目录，数据库及后端源码不暴露。
 (DATA / 'uploads').mkdir(parents=True, exist_ok=True)
 app.mount('/uploads', StaticFiles(directory=DATA / 'uploads'), name='uploads')
@@ -434,3 +469,7 @@ def script():
 @app.get('/style.css', include_in_schema=False)
 def style():
     return FileResponse(ROOT / 'frontend/style.css', media_type='text/css')
+
+@app.get('/campus.js', include_in_schema=False)
+def campus_script():
+    return FileResponse(ROOT / 'frontend/campus.js', media_type='text/javascript')

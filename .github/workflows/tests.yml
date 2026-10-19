@@ -30,6 +30,9 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check frontend/app.js
+          node --check frontend/campus.js
+          node --check scripts/campus-browser-test.cjs
+          node --check scripts/browser-helpers.cjs
           node --check scripts/browser-test.cjs
           node --check scripts/search-browser-test.cjs
           node --check scripts/build-report.cjs

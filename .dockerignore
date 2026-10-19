@@ -7,3 +7,9 @@ tests
 __pycache__
 .pytest_cache
 *.zip
+
+test-data
+desktop-test
+build
+dist
+*.spec

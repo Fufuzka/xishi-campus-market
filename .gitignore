@@ -43,3 +43,6 @@ service-account*.json
 
 # 可重新生成的交付清单
 delivery-manifest.json
+
+# 隔离浏览器验收的数据库与服务日志
+test-data/

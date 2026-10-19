@@ -14,13 +14,21 @@ def clients(tmp_path, monkeypatch):
 def signup(c,name='student'):
     r=c.post('/api/auth/register',json={'username':name,'password':'Campus2026!','nickname':'测试同学'})
     assert r.status_code==201
+    with main.db() as db:
+        db.execute("UPDATE users SET verification='approved' WHERE id=?",(r.json()['id'],))
     return r.json()
+
+def approved_post(client, **kwargs):
+    response=client.post('/api/products',**kwargs)
+    if response.status_code==201:
+        with main.db() as db:db.execute("UPDATE products SET review_status='approved' WHERE id=?",(response.json()['id'],))
+    return response
 
 def payload(**kw):
     return {'title':'测试高数教材','description':'保存完好的教材，含少量笔记。','price':'12.34','category':'教材书籍','image_url':'/assets/book.svg','contact':'wx:test','location':'图书馆门口','condition':'轻微使用',**kw}
 
 def publish(c):
-    r=c.post('/api/products',json=payload())
+    r=approved_post(c,json=payload())
     assert r.status_code==201
     return r.json()['id']
 
@@ -46,19 +54,20 @@ def test_publish_permissions_and_contact_privacy(clients):
     assert b.put(f'/api/products/{pid}',json=payload()).status_code==403
     assert b.patch(f'/api/products/{pid}/status',json={'status':'sold'}).status_code==403
     assert a.put(f'/api/products/{pid}',json=payload(title='修改后的教材')).status_code==200
-    assert b.get(f'/api/products/{pid}').json()['title']=='修改后的教材'
+    assert b.get(f'/api/products/{pid}').status_code==404
+    assert a.get(f'/api/products/{pid}').json()['review_status']=='pending'
     assert a.get('/api/me/products').json()[0]['contact']=='wx:test'
 
 @pytest.mark.parametrize('changes',[{'price':-1},{'price':'0.001'},{'price':'NaN'},{'price':1000000},{'category':'非法分类'},{'image_url':'javascript:alert(1)'},{'image_url':'//evil.com/x.jpg'},{'title':'  '},{'description':'x'}])
 def test_validation(clients,changes):
     a,_=clients;signup(a)
-    assert a.post('/api/products',json=payload(**changes)).status_code==422
+    assert approved_post(a,json=payload(**changes)).status_code==422
 
 def test_search_filter_sort_pagination(clients):
     a,b=clients;signup(a)
     publish(a)
-    a.post('/api/products',json=payload(title='线性代数课本',price='30'))
-    a.post('/api/products',json=payload(title='无线耳机',price='100',category='数码电子'))
+    approved_post(a,json=payload(title='线性代数课本',price='30'))
+    approved_post(a,json=payload(title='无线耳机',price='100',category='数码电子'))
     assert b.get('/api/products?q=笔记').json()['total']==3
     assert b.get('/api/products?q=高数&category=教材书籍&min_price=12&max_price=13').json()['total']==1
     assert b.get('/api/products?sort=price_desc&page_size=1&page=2').json()['items'][0]['price']==30
@@ -111,7 +120,7 @@ def test_upload_validation(clients):
 
 def test_cross_origin_and_static_isolation(clients):
     a,b=clients;signup(a)
-    assert a.post('/api/products',json=payload(),headers={'Origin':'https://evil.test'}).status_code==403
+    assert approved_post(a,json=payload(),headers={'Origin':'https://evil.test'}).status_code==403
     for path in ['/data/market.db','/backend/main.py','/.env']:
         assert b.get(path).status_code==404
     assert b.get('/').status_code==200
@@ -126,7 +135,7 @@ def test_expired_session(clients):
 
 def test_money_precision(clients):
     a,b=clients;signup(a)
-    pid=a.post('/api/products',json=payload(price='0.29')).json()['id']
+    pid=approved_post(a,json=payload(price='0.29')).json()['id']
     assert b.get(f'/api/products/{pid}').json()['price']==0.29
     with main.db() as c:assert c.execute('SELECT price_cents FROM products WHERE id=?',(pid,)).fetchone()[0]==29
 
@@ -134,7 +143,7 @@ def test_relevance_is_default_and_can_switch_to_price_or_newest(clients):
     a,b=clients;signup(a)
     titles=['键盘','键盘机械版','无线键盘','桌面配件']
     for i,title in enumerate(titles):
-        assert a.post('/api/products',json=payload(title=title,description='这是一款键盘商品，保存完好。',price=str(40-i*10))).status_code==201
+        assert approved_post(a,json=payload(title=title,description='这是一款键盘商品，保存完好。',price=str(40-i*10))).status_code==201
     assert [p['title'] for p in b.get('/api/products?q=键盘').json()['items']]==titles
     assert b.get('/api/products?q=键盘&sort=newest').json()['items'][0]['title']=='桌面配件'
     assert [p['price'] for p in b.get('/api/products?q=键盘&sort=price_asc').json()['items']]==[10,20,30,40]
@@ -143,7 +152,7 @@ def test_relevance_is_default_and_can_switch_to_price_or_newest(clients):
 def test_search_multiple_terms_and_stable_pagination(clients):
     a,b=clients;signup(a)
     for title,description in [('无线键盘','机械键盘，适合学习使用。'),('键盘机械款','有线连接，适合学习使用。'),('无线耳机','保存完好的无线耳机。')]:
-        a.post('/api/products',json=payload(title=title,description=description))
+        approved_post(a,json=payload(title=title,description=description))
     r=b.get('/api/products',params={'q':'  键盘   无线 '}).json()
     assert r['total']==1 and r['items'][0]['title']=='无线键盘'
     first=b.get('/api/products?q=键盘&page_size=1&page=1').json()['items'][0]['id']
@@ -152,8 +161,8 @@ def test_search_multiple_terms_and_stable_pagination(clients):
 
 def test_condition_and_published_within_combined(clients):
     a,b=clients;signup(a)
-    new=a.post('/api/products',json=payload(condition='全新',price='25')).json()['id']
-    old=a.post('/api/products',json=payload(condition='全新',price='30')).json()['id']
+    new=approved_post(a,json=payload(condition='全新',price='25')).json()['id']
+    old=approved_post(a,json=payload(condition='全新',price='30')).json()['id']
     used=publish(a)
     with main.db() as c:
         c.execute("UPDATE products SET created_at=datetime('now','-8 days') WHERE id=?",(old,))
@@ -213,8 +222,8 @@ def test_history_cookie_persists_across_database_reinitialization(clients):
 
 def test_suggestions_only_come_from_on_sale_titles(clients):
     a,b=clients;signup(a)
-    pid=a.post('/api/products',json=payload(title='无线机械键盘')).json()['id']
-    hidden=a.post('/api/products',json=payload(title='已售古董相机')).json()['id']
+    pid=approved_post(a,json=payload(title='无线机械键盘')).json()['id']
+    hidden=approved_post(a,json=payload(title='已售古董相机')).json()['id']
     a.patch(f'/api/products/{hidden}/status',json={'status':'sold'})
     suggestions=b.get('/api/search/suggestions').json()['items']
     assert '键盘' in suggestions and '相机' not in suggestions and '已售古董相机' not in suggestions

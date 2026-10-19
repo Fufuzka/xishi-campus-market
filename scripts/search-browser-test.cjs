@@ -9,6 +9,7 @@ const fs=require('fs');const path=require('path');
  const check=async(name,fn)=>{await fn();steps.push({name,result:'PASS'})};
  const shot=async(name)=>{for(let n=0;n<3;n++){try{return await page.screenshot({path:path.join(out,name+'.png'),fullPage:false})}catch(e){if(n===2)throw e;await page.waitForTimeout(300)}}};
  const base=process.env.BASE_URL||'http://127.0.0.1:8003';
+ const reviewer=await require('./browser-helpers.cjs').createReviewer(browser,base);
  const input=()=>page.getByLabel('搜索商品',{exact:true});
  const history=async()=>page.evaluate(async()=>(await fetch('/api/search/history')).json());
  const waitHistory=async(term,absent=false)=>{for(let n=0;n<100;n++){const h=await history();if(absent?!h.items.includes(term):h.items[0]===term)return;await page.waitForTimeout(50)}throw Error('历史更新未完成：'+term)};
@@ -24,9 +25,11 @@ const fs=require('fs');const path=require('path');
  await check('历史单条删除与清空确认',async()=>{await waitHistory('无线键盘，安静码字');await discovery();await page.getByRole('button',{name:'删除搜索记录：耳机',exact:true}).click();await waitHistory('耳机',true);await page.getByRole('button',{name:'清空',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click();if(!(await history()).items.length)throw Error('取消清空仍删除了历史');await page.getByRole('button',{name:'清空',exact:true}).click();await page.getByRole('button',{name:'确认清空',exact:true}).click();await page.getByText('还没有历史搜索，搜过的好物会留在这里。',{exact:true}).waitFor()});
  const owner=await browser.newContext();const account='searchqa_'+Date.now();
  await owner.request.post(base+'/api/auth/register',{data:{username:account,password:'Campus2026!',nickname:'搜索验收同学'}});
+ await reviewer.verify(owner.request);
  const testTerm='验收键盘'+Date.now().toString().slice(-5);
  const products=[[testTerm,'全新','300'],[testTerm+'专业款','轻微使用','200'],['配件验收套装','全新','100']];
  for(const [title,condition,price] of products){const r=await owner.request.post(base+'/api/products',{data:{title,condition,price,category:'数码电子',description:testTerm+'相关的专用测试商品，仅用于本地功能验收。',image_url:'/assets/keyboard.svg',contact:'测试联系方式',location:'图书馆门口'}});if(r.status()!==201)throw Error('无法准备验收商品')}
+ await reviewer.approveOwned(owner.request);
  await check('新搜索默认最相关而非最新或价格',async()=>{await search(testTerm);if(await page.getByRole('button',{name:'最相关',exact:true}).getAttribute('aria-pressed')!=='true')throw Error('默认排序不是相关度');if(await page.locator('.product-title').first().textContent()!==testTerm)throw Error('标题精确匹配未优先')});
  await check('价格按钮低高双向切换并能恢复相关度',async()=>{await page.getByRole('button',{name:'价格：未排序',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.product-grid .price-row strong')?.textContent==='¥100');await page.getByRole('button',{name:'价格：从低到高',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.product-grid .price-row strong')?.textContent==='¥300');await page.getByRole('button',{name:'最新发布',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.product-title')?.textContent==='配件验收套装');await search(testTerm);if(await page.getByRole('button',{name:'最相关',exact:true}).getAttribute('aria-pressed')!=='true')throw Error('新搜索没有恢复相关度')});
  await check('取消筛选保留原结果',async()=>{await page.getByRole('button',{name:'打开筛选',exact:true}).click();await page.getByRole('dialog',{name:'筛选商品'}).getByRole('button',{name:'全新',exact:true}).click();await page.getByRole('button',{name:'关闭筛选',exact:true}).click();if(await page.locator('.active-filter-tags button').count())throw Error('取消仍应用了筛选')});
@@ -37,5 +40,5 @@ const fs=require('fs');const path=require('path');
  await check('登录与退出切换历史范围',async()=>{await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();await page.getByLabel('用户名',{exact:true}).fill(account);await page.getByLabel('密码',{exact:true}).fill('Campus2026!');await page.getByRole('button',{name:'登录',exact:true}).click();await page.locator('.account').getByText('搜索验收同学',{exact:true}).waitFor();if((await history()).scope!=='account'||(await history()).items.length)throw Error('游客历史串入账号');await search('耳机');await page.getByRole('button',{name:'退出',exact:true}).click();await page.getByRole('button',{name:'登录 / 注册',exact:true}).waitFor();const h=await history();if(h.scope!=='device'||h.items.includes('耳机')||!h.items.includes(testTerm))throw Error('退出后历史范围错误')});
  await owner.close();if(errors.length)throw Error(errors.join('\n'));
  fs.writeFileSync(path.join(out,'search-browser-results.json'),JSON.stringify({status:'PASS',steps,pageErrors:errors},null,2));console.log(JSON.stringify({status:'PASS',checks:steps.length,screenshots:5}));
- }catch(e){await shot('search-browser-failure');fs.writeFileSync(path.join(out,'search-browser-results.json'),JSON.stringify({status:'FAIL',steps,error:e.message,pageErrors:errors},null,2));throw e}finally{await browser.close()}
+ }catch(e){await shot('search-browser-failure');fs.writeFileSync(path.join(out,'search-browser-results.json'),JSON.stringify({status:'FAIL',steps,error:e.message,pageErrors:errors},null,2));throw e}finally{await reviewer.close();await browser.close()}
 })();
