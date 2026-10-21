@@ -13,3 +13,5 @@ desktop-test
 build
 dist
 *.spec
+
+.venv-*

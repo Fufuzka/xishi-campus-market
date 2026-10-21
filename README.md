@@ -11,7 +11,7 @@
 
 ## CloudStudio 一键启动
 
-当前仓库按用户选择改为公开，可从 `https://github.com/Fufuzka/xishi-campus-market.git` 导入。选择 **Python 3.12** 环境，在根目录运行：
+当前仓库按用户选择改为公开，可从 `https://github.com/Fufuzka/xishi-campus-market.git` 导入。选择 **Python 3.11 或 3.12** 环境（已有 3.11.1 可直接使用），在根目录运行：
 
 ```sh
 sh start.sh --cloud
@@ -72,7 +72,7 @@ python -m backend.create_admin 管理员用户名
 
 ## 本机启动
 
-需要 Python 3.12。Vue 已随项目保存，无需 Node、前端构建或在线 CDN。
+需要 Python 3.11 或 3.12。Vue 已随项目保存，无需 Node、前端构建或在线 CDN。
 
 Windows PowerShell：
 

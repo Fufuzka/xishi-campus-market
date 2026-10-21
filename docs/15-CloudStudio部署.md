@@ -12,7 +12,7 @@
 
 ## 2. CloudStudio 操作
 
-1. 创建 Python 3.12 环境，从上面的公开 GitHub 地址导入仓库，选择 main 分支。
+1. 选择 Python 3.11 或 3.12 环境（已有 3.11.1 可直接使用），从上面的公开 GitHub 地址导入仓库，选择 main 分支。
 2. 在项目根目录打开终端，执行 `sh start.sh --cloud`。脚本自动创建 Python 虚拟环境、安装锁定依赖，并在 `0.0.0.0:8000` 启动一个服务，同时提供网页和接口。
 3. 在平台端口／应用预览中打开 **8000** 端口的 HTTPS 预览地址。项目已有 `.vscode/preview.yml`，支持读取该配置的平台可直接点运行／启动。
 4. 浏览器打开平台生成的完整 HTTPS 地址，检查 `/api/health`，再注册学生、提交认证图片、创建管理员审核并验收业务。
@@ -28,6 +28,8 @@
 ```sh
 .venv/bin/python -m backend.create_admin your_admin_name
 ```
+
+如果启动日志显示使用 `.venv-3.11`，请将上面命令中的 `.venv/bin/python` 换成 `.venv-3.11/bin/python`；以启动日志显示的实际环境目录为准。
 
 密码交互输入，不写进代码或 Git，不把本机演示管理员的密码用于公开站点。普通用户仍只能由管理员人工审核认证。
 
@@ -52,8 +54,8 @@ sh start.sh --cloud
 |---|---|
 | PORT | 监听端口，默认 8000，1024–65535 |
 | MARKET_HOST | Cloud 默认 0.0.0.0；普通本机默认 127.0.0.1 |
-| MARKET_PYTHON | 可选 Python 3.12 可执行文件路径 |
-| MARKET_VENV | 虚拟环境目录，默认 .venv；旧环境版本不对时应改用新目录 |
+| MARKET_PYTHON | 可选 Python 3.11 或 3.12 可执行文件路径 |
+| MARKET_VENV | 虚拟环境目录，默认 .venv；默认目录异常时自动选择 .venv-版本号，保留旧目录 |
 | MARKET_DATA_DIR | 数据库、商品上传、认证证明的持久化目录，默认项目 data |
 | MARKET_PUBLIC_ORIGIN | 可选精确 HTTPS 预览来源，脚本可从平台变量生成 |
 | COOKIE_SECURE | Cloud 默认为 1；仅本机 HTTP 测试可设 0 |
@@ -73,3 +75,15 @@ sh start.sh --cloud
 新增 Ubuntu GitHub Actions 任务，从公开代码安装依赖并执行同一启动脚本与验收，结果见仓库 Actions。接口自动化覆盖代理来源配置和 Secure Cookie，Linux 任务状态以真实运行结果为准。
 
 依据腾讯云官方 [配置运行文件](https://cloud.tencent.com/document/product/1039/131807) 使用 `.vscode/preview.yml` 的 apps、root、run、port、mainPort；依据 [URL 访问异常排查](https://cloud.tencent.com/document/product/1039/131933) 采用 0.0.0.0 监听及平台预览地址变量。用户提供的范例仅作为目标环境参考，不照搬其他项目的 Vite 配置。
+
+## 7. Python 版本与创建环境失败
+
+报错 `ensurepip is not available` 表示所选 Python 缺少虚拟环境的 pip 引导组件，不表示必须换成 3.12。已选择 `pyenv shell 3.11.1` 的工作区可执行：
+
+```sh
+git pull
+pyenv shell 3.11.1
+sh start.sh --cloud
+```
+
+脚本优先使用当前终端选择的 Python 3.11／3.12。若旧 `.venv` 创建失败或版本不同，会保留旧目录，自动创建／复用 `.venv-3.11` 等新环境。创建时优先使用 ensurepip；缺失时尝试使用现有 Python 的 pip 引导新虚拟环境，不安装系统级依赖。若两种方式均不可用，脚本明确报错，需选用带 ensurepip 或 pip 的 Python。

@@ -55,13 +55,22 @@ jobs:
   cloudstudio-start:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+        environment: [clean, incomplete]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - name: Check shell script
         run: sh -n start.sh
+      - name: Simulate a previously failed environment
+        if: matrix.environment == 'incomplete'
+        run: |
+          python -m venv --without-pip .venv
       - name: Run cloud startup and proxy smoke test
         shell: bash
         run: |
@@ -77,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cloudstudio-start-results
+          name: cloudstudio-start-results-${{ matrix.python }}-${{ matrix.environment }}
           path: |
             evidence/cloudstudio-smoke-results.json
             ${{ runner.temp }}/xishi-cloud.log
