@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "checks": [
+    "health_ready",
+    "frontend_and_api_same_port",
+    "no_automatic_demo_seed",
+    "trusted_https_origin_register_cookie",
+    "session_cookie_round_trip",
+    "foreign_origin_rejected",
+    "private_proof_upload_and_access_control",
+    "verification_submission_through_proxy",
+    "no_automatic_admin_privileges",
+    "logout"
+  ],
+  "check_count": 10,
+  "scope": "same-port cloud startup and proxy-origin simulation"
+}

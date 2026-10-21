@@ -1,13 +1,23 @@
 # 夕拾 · 校园二手交易集市
 
-基于 **Python FastAPI + Vue 3 + SQLite** 的可运行课程设计项目。包含设计、实现、测试、审查、部署配置和主要功能截图。当前网页测试版本 0.2.0-beta.1，日期 2026-10-19；包含新的搜索接口和筛选参数。
+基于 **Python FastAPI + Vue 3 + SQLite** 的可运行课程设计项目。包含设计、实现、测试、审查、部署配置和主要功能截图。当前网页测试版本 0.2.0-beta.1，日期 2026-10-21；包含新的搜索接口和筛选参数。
 
-## 私有开发管理
+## 个人开发与公开仓库
 
 源码、设计文档和测试材料通过 Git 管理；用户数据库、上传图片、日志、环境和构建产物不入库。所有迭代均为测试版；如需使用 GitHub Release，必须标记为 Pre-release，不上传桌面安装包。日常提交、自动测试与发布说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-- 私有仓库：[Fufuzka/xishi-campus-market](https://github.com/Fufuzka/xishi-campus-market)
+- 公开仓库：[Fufuzka/xishi-campus-market](https://github.com/Fufuzka/xishi-campus-market)
 - 自动测试：[GitHub Actions](https://github.com/Fufuzka/xishi-campus-market/actions)
+
+## CloudStudio 一键启动
+
+当前仓库按用户选择改为公开，可从 `https://github.com/Fufuzka/xishi-campus-market.git` 导入。选择 **Python 3.12** 环境，在根目录运行：
+
+```sh
+sh start.sh --cloud
+```
+
+打开平台 **8000 端口的 HTTPS 预览**。前端和 API 共用这个端口，不需要 Vite、Node 或单独配置浏览器 localhost API 地址。已提供 `.vscode/preview.yml`；平台读取配置后可直接点启动。默认不生成演示账号或管理员；需要演示数据可加 `--demo`。完整环境变量、管理员创建和代理来源说明见 [15-CloudStudio部署](docs/15-CloudStudio部署.md)。仓库公开不代表网站已经在云端启动。
 
 ## 校园功能调整
 
@@ -52,7 +62,7 @@ python -m backend.create_admin 管理员用户名
 | 开发流程与验收追踪 | [09-开发过程与验收](docs/09-开发过程与验收.md) |
 | 网页测试与未来部署 | [10-桌面软件与联网切换](docs/10-桌面软件与联网切换.md)（现为网页路线说明） |
 
-**当前网页测试版已验证：57 项 API 测试、57 项浏览器检查全部通过。** 当前无公网服务器或域名，提供可部署配置并采用题目允许的主要功能截图作为本次交付证据。Docker / HTTPS 配置尚未在服务器实测；导师评审为待完成状态，未伪造签名或通过结论。
+**当前网页测试版已验证：63 项 API 测试、57 项浏览器检查，另有 10 项云端启动与代理模拟检查全部通过。** 当前无公网服务器或域名，提供可部署配置并采用题目允许的主要功能截图作为本次交付证据。Docker / HTTPS 配置尚未在服务器实测；导师评审为待完成状态，未伪造签名或通过结论。
 
 ## 本机网页测试服务
 

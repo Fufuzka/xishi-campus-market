@@ -1,0 +1,8 @@
+apps:
+  - name: 夕拾网页测试版
+    root: ./
+    run: PORT=8000 sh start.sh --cloud
+    port: 8000
+    mainPort: true
+    autoOpen: true
+    autoPreview: true

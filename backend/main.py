@@ -12,6 +12,7 @@ import secrets
 import sqlite3
 import time
 import warnings
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, UploadFile, File, Query
 from fastapi.staticfiles import StaticFiles
@@ -55,8 +56,20 @@ def hash_password(password, salt=None):
 def verify_password(password, stored):
     return hmac.compare_digest(hash_password(password, stored.split(':')[0]), stored)
 
+def public_origin():
+    value = os.environ.get('MARKET_PUBLIC_ORIGIN', '').strip().rstrip('/')
+    if not value:
+        return ''
+    parsed = urlsplit(value)
+    if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+            or parsed.path or parsed.query or parsed.fragment or any(ch.isspace() for ch in value)):
+        raise ValueError('MARKET_PUBLIC_ORIGIN 必须是完整的 HTTPS 站点根地址，不含路径、账号或查询参数')
+    parsed.port  # 检查非法端口；仅信任部署人员明确配置的完整来源。
+    return parsed.scheme + '://' + parsed.netloc.lower()
+
 @asynccontextmanager
 async def lifespan(app):
+    public_origin()
     init_db()
     yield
 
@@ -70,7 +83,11 @@ async def invalid_request(request, exc):
 async def headers(request, call_next):
     if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
         origin = request.headers.get('origin')
-        if origin and origin.rstrip('/') != str(request.base_url).rstrip('/'):
+        allowed_origins = {str(request.base_url).rstrip('/')}
+        configured_origin = public_origin()
+        if configured_origin:
+            allowed_origins.add(configured_origin)
+        if origin and origin.rstrip('/') not in allowed_origins:
             return JSONResponse(status_code=403, content={'detail': '不允许跨站提交'})
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'

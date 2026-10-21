@@ -232,3 +232,30 @@ def test_suggestions_only_come_from_on_sale_titles(clients):
     a.patch(f'/api/products/{pid}/status',json={'status':'off_shelf'})
     assert b.get('/api/search/suggestions').json()['items']==[]
     assert b.get('/api/search/suggestions?limit=25').status_code==422
+
+
+def test_explicit_cloud_preview_origin_without_allowing_other_sites(clients,monkeypatch):
+    a,b=clients
+    monkeypatch.setenv('MARKET_PUBLIC_ORIGIN','https://preview.example.test')
+    data={'username':'cloudstudent','password':'Campus2026!','nickname':'云端测试'}
+    assert a.post('/api/auth/register',json=data,headers={'Origin':'https://preview.example.test'}).status_code==201
+    assert a.get('/api/me').status_code==200
+    assert a.post('/api/auth/logout',headers={'Origin':'https://evil.example.test'}).status_code==403
+    assert a.get('/api/me').status_code==200
+    assert a.post('/api/auth/logout',headers={'Origin':'https://preview.example.test'}).status_code==200
+    assert a.get('/api/me').status_code==401
+
+
+@pytest.mark.parametrize('value',['http://preview.example.test','https://user:pass@preview.example.test','https://preview.example.test/path','https://preview.example.test/?query=1'])
+def test_public_origin_rejects_unsafe_configuration(monkeypatch,value):
+    monkeypatch.setenv('MARKET_PUBLIC_ORIGIN',value)
+    with pytest.raises(ValueError):main.public_origin()
+
+
+def test_https_deployment_sets_secure_cookie(clients,monkeypatch):
+    a,_=clients
+    monkeypatch.setenv('COOKIE_SECURE','1')
+    response=a.post('/api/auth/register',json={'username':'securestudent','password':'Campus2026!','nickname':'HTTPS 测试'})
+    assert response.status_code==201
+    cookie=response.headers['set-cookie']
+    assert 'Secure' in cookie and 'HttpOnly' in cookie and 'SameSite=lax' in cookie
