@@ -537,6 +537,8 @@ def save_image(raw, directory):
 import sys
 from backend.campus import install
 install(app, sys.modules[__name__])
+from backend.recovery import install as install_recovery
+install_recovery(app, sys.modules[__name__])
 
 # 只挂载前端和上传目录，数据库及后端源码不暴露。
 (DATA / 'uploads').mkdir(parents=True, exist_ok=True)

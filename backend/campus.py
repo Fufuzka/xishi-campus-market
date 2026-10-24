@@ -55,6 +55,12 @@ def migrate(c, categories):
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_order_active_product ON orders(product_id) WHERE status IN ('pending_communication','pending_trade');
     CREATE INDEX IF NOT EXISTS idx_orders_seller_status ON orders(seller_id,status);
+    CREATE TABLE IF NOT EXISTS security_questions(
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      question_id INTEGER NOT NULL CHECK(question_id BETWEEN 1 AND 3),answer_hash TEXT NOT NULL,
+      PRIMARY KEY(user_id,question_id));
+    CREATE TABLE IF NOT EXISTS recovery_attempts(key TEXT PRIMARY KEY,attempts INTEGER NOT NULL,window_start INTEGER NOT NULL);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_direct_conversation ON conversations(min(starter_id,recipient_id),max(starter_id,recipient_id)) WHERE product_id IS NULL AND wanted_id IS NULL;
     CREATE TABLE IF NOT EXISTS reports(
       id INTEGER PRIMARY KEY,reporter_id INTEGER NOT NULL REFERENCES users(id),product_id INTEGER NOT NULL REFERENCES products(id),
       reason TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',resolution TEXT NOT NULL DEFAULT '',
@@ -99,6 +105,7 @@ class WantedInput(TextModel):
 class ConversationInput(BaseModel):
     product_id: int | None = Field(None,gt=0)
     wanted_id: int | None = Field(None,gt=0)
+    peer_id: int | None = Field(None,gt=0)
 
 
 class ChatInput(TextModel):
@@ -258,9 +265,16 @@ def install(app, b):
 
     @app.post('/api/conversations',status_code=201,tags=['私聊'])
     def start_chat(p:ConversationInput,user=Depends(verified)):
-        if (p.product_id is None)==(p.wanted_id is None):raise HTTPException(422,'请选择一个商品或求购')
+        if sum(x is not None for x in (p.product_id,p.wanted_id,p.peer_id))!=1:raise HTTPException(422,'请选择一个商品、求购或私信联系人')
         with b.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            if p.peer_id:
+                if p.peer_id==user['id']:raise HTTPException(422,'不能与自己发起私聊')
+                peer=c.execute('SELECT disabled FROM users WHERE id=?',(p.peer_id,)).fetchone()
+                if not peer or peer['disabled']:raise HTTPException(404,'联系人不存在或不可联系')
+                existing=c.execute('SELECT id FROM conversations WHERE product_id IS NULL AND wanted_id IS NULL AND ((starter_id=? AND recipient_id=?) OR (starter_id=? AND recipient_id=?))',(user['id'],p.peer_id,p.peer_id,user['id'])).fetchone()
+                cid=existing[0] if existing else c.execute('INSERT INTO conversations(starter_id,recipient_id) VALUES(?,?)',(user['id'],p.peer_id)).lastrowid
+                return {'id':cid}
             if p.product_id:
                 row=b.get_product(c,p.product_id)
                 if row['status']!='on_sale' or row['review_status']!='approved':raise HTTPException(409,'商品当前不可联系')
@@ -278,11 +292,14 @@ def install(app, b):
     @app.get('/api/conversations',tags=['私聊'])
     def chats(user=Depends(b.current_user)):
         with b.db() as c:
-            return [dict(x) for x in c.execute('''SELECT v.*,u.nickname AS peer,COALESCE(p.title,w.title) AS title,
-            (SELECT content FROM private_messages WHERE conversation_id=v.id ORDER BY id DESC LIMIT 1) AS last_message
+            return [dict(x) for x in c.execute('''SELECT v.*,u.nickname AS peer,u.id AS peer_id,COALESCE(p.title,w.title,'直接私信') AS title,
+            CASE WHEN v.product_id IS NOT NULL THEN 'product' WHEN v.wanted_id IS NOT NULL THEN 'wanted' ELSE 'direct' END AS source_type,
+            (SELECT content FROM private_messages WHERE conversation_id=v.id ORDER BY id DESC LIMIT 1) AS last_message,
+            COALESCE((SELECT created_at FROM private_messages WHERE conversation_id=v.id ORDER BY id DESC LIMIT 1),v.created_at) AS last_message_at,
+            COALESCE((SELECT id FROM private_messages WHERE conversation_id=v.id ORDER BY id DESC LIMIT 1),0) AS last_message_id
             FROM conversations v JOIN users u ON u.id=CASE WHEN v.starter_id=? THEN v.recipient_id ELSE v.starter_id END
             LEFT JOIN products p ON p.id=v.product_id LEFT JOIN wanted w ON w.id=v.wanted_id
-            WHERE v.starter_id=? OR v.recipient_id=? ORDER BY v.id DESC''',(user['id'],user['id'],user['id']))]
+            WHERE v.starter_id=? OR v.recipient_id=? ORDER BY last_message_at DESC,last_message_id DESC,v.id DESC''',(user['id'],user['id'],user['id']))]
 
     @app.get('/api/conversations/{cid}/messages',tags=['私聊'])
     def private_messages(cid:int,after:int=Query(0,ge=0),user=Depends(b.current_user)):

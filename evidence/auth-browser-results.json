@@ -6,11 +6,11 @@
       "result": "PASS"
     },
     {
-      "name": "Escape 关闭后清空输入",
+      "name": "Escape 不关闭，点击叉后清空输入",
       "result": "PASS"
     },
     {
-      "name": "点击遮罩关闭后清空输入",
+      "name": "点击遮罩不关闭，点击叉后清空输入",
       "result": "PASS"
     },
     {

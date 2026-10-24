@@ -10,4 +10,10 @@ async function createReviewer(browser,base){
   close(){return context.close()}
  };
 }
-module.exports={createReviewer};
+async function navigate(page,name){
+ const button=page.getByRole('button',{name,exact:true});
+ if(['我的发布','我卖出的','我买到的'].includes(name)&&!await button.isVisible())await page.getByRole('button',{name:'我的交易',exact:true}).click();
+ if(['个人资料','账号与安全','学生认证','我的举报'].includes(name)&&!await button.isVisible())await page.getByRole('button',{name:'账户设置',exact:true}).click();
+ await button.click();
+}
+module.exports={createReviewer,navigate};

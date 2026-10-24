@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "筛选分组在桌面和手机均准确定位",
+      "result": "PASS"
+    },
+    {
+      "name": "登录只允许点击叉关闭且清空输入",
+      "result": "PASS"
+    },
+    {
+      "name": "交易和账户分组支持展开收起",
+      "result": "PASS"
+    },
+    {
+      "name": "安全问题至少一题且可设置三题",
+      "result": "PASS"
+    },
+    {
+      "name": "找回流程拒绝错误答案并可重置密码",
+      "result": "PASS"
+    },
+    {
+      "name": "消息中心显示来源并与交易操作分离",
+      "result": "PASS"
+    },
+    {
+      "name": "商品联系可转为独立私信并按来源筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "三种布局的分组与消息在手机均可使用",
+      "result": "PASS"
+    },
+    {
+      "name": "手机找回弹窗可滚动且点击外部不会关闭",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}
