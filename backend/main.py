@@ -105,6 +105,8 @@ def current_user(request: Request):
         raise HTTPException(401, '请先登录')
     if row['disabled']:
         raise HTTPException(403, '账号已停用')
+    with db() as c:
+        c.execute("UPDATE users SET last_active_at=CURRENT_TIMESTAMP WHERE id=? AND (last_active_at='' OR last_active_at<datetime('now','-1 minute'))", (row['id'],))
     return dict(row)
 
 def require_verified(user):
@@ -126,6 +128,7 @@ class Registration(Credentials):
         return v.strip()
 
 def issue_session(c, response, uid):
+    c.execute('UPDATE users SET last_active_at=CURRENT_TIMESTAMP WHERE id=?', (uid,))
     token = secrets.token_urlsafe(32)
     c.execute('DELETE FROM sessions WHERE expires_at<=?', (int(time.time()),))
     c.execute('INSERT INTO sessions VALUES(?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), uid, int(time.time()) + 86400 * 7))
@@ -163,6 +166,50 @@ def logout(request: Request, response: Response):
 @app.get('/api/me', tags=['用户'])
 def me(user=Depends(current_user)):
     return user
+
+class ProfileInput(BaseModel):
+    nickname: str = Field(min_length=1, max_length=24)
+    bio: str = Field(default='', max_length=200)
+
+    @field_validator('nickname', 'bio')
+    @classmethod
+    def clean(cls, value):
+        return value.strip()
+
+    @model_validator(mode='after')
+    def valid_nickname(self):
+        if not self.nickname:
+            raise ValueError('昵称不能为空')
+        return self
+
+class PasswordInput(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+@app.get('/api/me/profile', tags=['个人中心'])
+def profile(user=Depends(current_user)):
+    with db() as c:
+        return dict(c.execute('SELECT username,nickname,bio,created_at FROM users WHERE id=?', (user['id'],)).fetchone())
+
+@app.patch('/api/me/profile', tags=['个人中心'])
+def update_profile(p: ProfileInput, user=Depends(current_user)):
+    with db() as c:
+        c.execute('UPDATE users SET nickname=?,bio=? WHERE id=?', (p.nickname,p.bio,user['id']))
+    return {'ok': True}
+
+@app.post('/api/me/password', tags=['个人中心'])
+def change_password(p: PasswordInput, response: Response, user=Depends(current_user)):
+    with db() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row=c.execute('SELECT password_hash FROM users WHERE id=?', (user['id'],)).fetchone()
+        if not verify_password(p.current_password, row['password_hash']):
+            raise HTTPException(400, '当前密码不正确')
+        if p.current_password==p.new_password:
+            raise HTTPException(422, '新密码不能与当前密码相同')
+        c.execute('UPDATE users SET password_hash=? WHERE id=?', (hash_password(p.new_password),user['id']))
+        c.execute('DELETE FROM sessions WHERE user_id=?', (user['id'],))
+        issue_session(c,response,user['id'])
+    return {'ok': True}
 
 @app.get('/api/health', tags=['运维'])
 def health():
@@ -231,7 +278,7 @@ def product_dict(row, include_contact=False):
         result.pop('contact', None)
     return result
 
-SELECT_PRODUCT = 'SELECT p.*,u.nickname AS seller,u.disabled AS seller_disabled FROM products p JOIN users u ON u.id=p.owner_id'
+SELECT_PRODUCT = "SELECT p.*,u.nickname AS seller,u.disabled AS seller_disabled,u.bio AS seller_bio,u.last_active_at AS seller_last_active_at,u.is_demo AS is_demo,(SELECT COUNT(*) FROM orders o WHERE o.seller_id=u.id AND o.status='completed' AND o.buyer_confirmed=1 AND o.seller_confirmed=1) AS completed_sales FROM products p JOIN users u ON u.id=p.owner_id"
 
 def search_owner(request, response):
     try:
@@ -302,7 +349,7 @@ def search_suggestions(q: str = Query('',max_length=100), limit: int = Query(8,g
     return {'items':result[:limit]}
 
 @app.get('/api/products', tags=['商品'])
-def products(q: str = Query('', max_length=100), category: str = '', campus: str = Query('',max_length=40), min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc']='relevance', condition: Literal['全新','几乎全新','轻微使用','正常使用'] | None = None, published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
+def products(q: str = Query('', max_length=100), category: str = '', campus: str = Query('',max_length=40), min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc','recent_active','completed_sales']='relevance', reduced: bool = False, condition: Literal['全新','几乎全新','轻微使用','正常使用'] | None = None, published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
     if min_price > max_price:
         raise HTTPException(422, '最低价不能高于最高价')
     if published_within is not None and published_within not in (1,3,7,14):
@@ -326,13 +373,15 @@ def products(q: str = Query('', max_length=100), category: str = '', campus: str
     if published_within:
         where += " AND p.created_at>=datetime('now',?)"
         args.append(f'-{published_within} days')
+    if reduced:
+        where += " AND p.previous_price_cents>p.price_cents AND p.price_reduced_at<>''"
     order_args=[]
     if sort=='relevance' and term:
         title_tokens=' AND '.join('instr(lower(p.title),lower(?))>0' for _ in tokens)
         order='CASE WHEN lower(p.title)=lower(?) THEN 0 WHEN instr(lower(p.title),lower(?))=1 THEN 1 WHEN instr(lower(p.title),lower(?))>0 THEN 2 WHEN '+title_tokens+' THEN 3 ELSE 4 END,p.id DESC'
         order_args=[term,term,term]+tokens
     else:
-        order = {'relevance':'p.id DESC','newest':'p.id DESC','price_asc':'p.price_cents,p.id DESC','price_desc':'p.price_cents DESC,p.id DESC'}[sort]
+        order = {'relevance':'p.id DESC','newest':'p.id DESC','price_asc':'p.price_cents,p.id DESC','price_desc':'p.price_cents DESC,p.id DESC','recent_active':'u.last_active_at DESC,p.id DESC','completed_sales':'completed_sales DESC,p.id DESC'}[sort]
     with db() as c:
         total = c.execute('SELECT COUNT(*) FROM products p' + where, args).fetchone()[0]
         rows = c.execute(SELECT_PRODUCT + where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?', args + order_args + [page_size, (page-1)*page_size]).fetchall()
@@ -387,7 +436,11 @@ def edit_product(pid: int, p: ProductInput, user=Depends(current_user)):
     require_verified(user)
     with db() as c:
         c.execute('BEGIN IMMEDIATE')
-        owned(c,pid,user)
+        old = owned(c,pid,user)
+        new_price = int(p.price*100)
+        if old['price_cents'] != new_price:
+            c.execute('INSERT INTO price_changes(product_id,old_price_cents,new_price_cents) VALUES(?,?,?)', (pid,old['price_cents'],new_price))
+            c.execute("UPDATE products SET previous_price_cents=?,price_reduced_at=CASE WHEN ?<price_cents THEN CURRENT_TIMESTAMP ELSE '' END WHERE id=?", (old['price_cents'],new_price,pid))
         if c.execute("SELECT 1 FROM orders WHERE product_id=? AND status IN ('pending_communication','pending_trade')",(pid,)).fetchone():
             raise HTTPException(409, '进行中的交易商品不能编辑')
         c.execute("UPDATE products SET title=?,description=?,price_cents=?,category=?,image_url=?,contact=?,location=?,condition=?,campus=?,trade_method=?,image_urls=?,review_status='pending',review_note='',updated_at=CURRENT_TIMESTAMP WHERE id=?", (p.title,p.description,int(p.price*100),p.category,p.image_url,p.contact,p.location,p.condition,p.campus,p.trade_method,json.dumps(p.image_urls),pid))

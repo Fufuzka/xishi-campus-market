@@ -15,10 +15,12 @@ def migrate(c, categories):
         'users': {'role': "TEXT NOT NULL DEFAULT 'student'", 'disabled': 'INTEGER NOT NULL DEFAULT 0',
                   'verification': "TEXT NOT NULL DEFAULT 'unverified'", 'real_name': "TEXT NOT NULL DEFAULT ''",
                   'student_no': "TEXT NOT NULL DEFAULT ''", 'college': "TEXT NOT NULL DEFAULT ''",
-                  'verification_note': "TEXT NOT NULL DEFAULT ''", 'verification_images': "TEXT NOT NULL DEFAULT '[]'"},
+                  'verification_note': "TEXT NOT NULL DEFAULT ''", 'verification_images': "TEXT NOT NULL DEFAULT '[]'",
+                  'bio': "TEXT NOT NULL DEFAULT ''", 'last_active_at': "TEXT NOT NULL DEFAULT ''", 'is_demo': 'INTEGER NOT NULL DEFAULT 0'},
         'products': {'campus': "TEXT NOT NULL DEFAULT '主校区'", 'trade_method': "TEXT NOT NULL DEFAULT '当面交易'",
                      'review_status': "TEXT NOT NULL DEFAULT 'pending'", 'review_note': "TEXT NOT NULL DEFAULT ''",
-                     'deleted': 'INTEGER NOT NULL DEFAULT 0', 'image_urls': "TEXT NOT NULL DEFAULT '[]'"},
+                     'deleted': 'INTEGER NOT NULL DEFAULT 0', 'image_urls': "TEXT NOT NULL DEFAULT '[]'",
+                     'previous_price_cents': 'INTEGER', 'price_reduced_at': "TEXT NOT NULL DEFAULT ''"},
     }
     for table, columns in additions.items():
         present = {r[1] for r in c.execute(f'PRAGMA table_info({table})')}
@@ -27,6 +29,9 @@ def migrate(c, categories):
                 c.execute(f'ALTER TABLE {table} ADD COLUMN {name} {declaration}')
     c.executescript('''
     CREATE TABLE IF NOT EXISTS verification_uploads(name TEXT PRIMARY KEY,owner_id INTEGER NOT NULL REFERENCES users(id));
+    CREATE TABLE IF NOT EXISTS price_changes(
+      id INTEGER PRIMARY KEY,product_id INTEGER NOT NULL REFERENCES products(id),
+      old_price_cents INTEGER NOT NULL,new_price_cents INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS categories(name TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS wanted(
       id INTEGER PRIMARY KEY,owner_id INTEGER NOT NULL REFERENCES users(id),title TEXT NOT NULL,
@@ -49,6 +54,7 @@ def migrate(c, categories):
       meeting_time TEXT NOT NULL DEFAULT '',buyer_confirmed INTEGER NOT NULL DEFAULT 0,seller_confirmed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_order_active_product ON orders(product_id) WHERE status IN ('pending_communication','pending_trade');
+    CREATE INDEX IF NOT EXISTS idx_orders_seller_status ON orders(seller_id,status);
     CREATE TABLE IF NOT EXISTS reports(
       id INTEGER PRIMARY KEY,reporter_id INTEGER NOT NULL REFERENCES users(id),product_id INTEGER NOT NULL REFERENCES products(id),
       reason TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',resolution TEXT NOT NULL DEFAULT '',

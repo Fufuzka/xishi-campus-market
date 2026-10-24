@@ -1,6 +1,9 @@
 const experienceFeatures={
- data(){return{settingsOpen:false,layout:'garden',viewer:null,proofUploading:false,inboxFilter:'all',layouts:[{id:'garden',name:'林间集市',description:'侧栏导航与舒展卡片，适合日常浏览'},{id:'horizon',name:'轻简横栏',description:'顶部导航与宽屏内容，让商品更突出'},{id:'compact',name:'清单浏览',description:'紧凑列表与完整摘要，方便比较商品'}]}},
+ data(){return{reduced:false,orderStatus:'all',profileForm:{nickname:'',bio:''},passwordForm:{current_password:'',new_password:'',confirm_password:''},passwordVisible:false,accountSaving:false,accountLoading:false,settingsOpen:false,layout:'garden',viewer:null,proofUploading:false,inboxFilter:'all',layouts:[{id:'garden',name:'林间集市',description:'侧栏导航与舒展卡片，适合日常浏览'},{id:'horizon',name:'轻简横栏',description:'顶部导航与宽屏内容，让商品更突出'},{id:'compact',name:'清单浏览',description:'紧凑列表与完整摘要，方便比较商品'}]}},
+ watch:{tab(){this.passwordForm={current_password:'',new_password:'',confirm_password:''};this.passwordVisible=false},user(value){if(!value){this.profileForm={nickname:'',bio:''};this.passwordForm={current_password:'',new_password:'',confirm_password:''};this.orders=[]}}},
  computed:{
+  tradeRows(){return this.orders.filter(o=>(this.tab==='purchases'?o.buyer_id===this.user?.id:o.seller_id===this.user?.id)&&(this.orderStatus==='all'||o.status===this.orderStatus))},
+
   previousOrders(){return this.activeChat?this.orders.filter(o=>this.matchesOrder(this.activeChat,o)&&o.id!==this.activeOrder?.id):[]},
   activeOrder(){return this.activeChat?this.orderForChat(this.activeChat):null},
   inboxThreads(){if(!this.user)return [];const rows=this.chats.map(c=>({...c,order:this.orderForChat(c)}));for(const o of this.orders){if(!rows.some(c=>c.order?.id===o.id||this.matchesOrder(c,o)))rows.push({id:'order-'+o.id,order:o,title:o.title,peer:this.user.id===o.buyer_id?o.seller:o.buyer,last_message:'查看面交安排，继续沟通',product_id:o.product_id})}return rows.filter(c=>this.inboxFilter==='all'||this.inboxFilter==='orders'&&c.order||this.inboxFilter==='active'&&c.order&&['pending_communication','pending_trade'].includes(c.order.status)||this.inboxFilter==='completed'&&c.order?.status==='completed')}
@@ -8,6 +11,14 @@ const experienceFeatures={
  mounted(){try{const saved=localStorage.getItem('xishi-layout');if(this.layouts.some(x=>x.id===saved))this.layout=saved}catch{}document.body.dataset.layout=this.layout;document.addEventListener('keydown',this.galleryKey)},
  beforeUnmount(){document.removeEventListener('keydown',this.galleryKey)},
  methods:{
+ async loadAccount(){this.accountLoading=true;const uid=this.user?.id;try{const profile=await this.api('/api/me/profile');if(this.user?.id===uid)this.profileForm=profile}finally{this.accountLoading=false}},
+ async saveProfile(){if(this.accountSaving)return;this.accountSaving=true;try{await this.api('/api/me/profile',{method:'PATCH',body:JSON.stringify(this.profileForm)});this.user=await this.api('/api/me');this.notify('个人资料已保存')}catch(e){this.notify(e.message)}finally{this.accountSaving=false}},
+ async savePassword(){if(this.accountSaving)return;if(this.passwordForm.new_password!==this.passwordForm.confirm_password){this.notify('两次新密码输入不一致');return}this.accountSaving=true;try{await this.api('/api/me/password',{method:'POST',body:JSON.stringify(this.passwordForm)});this.passwordForm={current_password:'',new_password:'',confirm_password:''};this.passwordVisible=false;this.notify('密码已修改，其他设备的登录已失效')}catch(e){this.notify(e.message)}finally{this.accountSaving=false}},
+ toggleReduced(){this.reduced=!this.reduced;this.page=1;this.load()},
+ quickCondition(){this.condition=this.condition==='全新'?'':'全新';this.page=1;this.load()},
+ quickTime(days){this.publishedWithin=days;this.page=1;this.load()},
+ applyQuickPrice(){this.filterDraft={campus:this.campus,category:this.category,condition:this.condition,minPrice:this.minPrice,maxPrice:this.maxPrice,publishedWithin:this.publishedWithin};this.applyFilters()},
+
  setLayout(id){if(!this.layouts.some(x=>x.id===id))return;this.layout=id;document.body.dataset.layout=id;try{localStorage.setItem('xishi-layout',id)}catch{this.notify('布局已切换，本次浏览器无法保存设置')}},
  imagesOf(p){return p?.image_urls?.length?p.image_urls:p?.image_url?[p.image_url]:[]},
  openGallery(images,index=0,title='图片预览'){if(images?.length)this.viewer={images:[...images],index,title}},

@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "新降价筛选与真实前后价格",
+      "result": "PASS"
+    },
+    {
+      "name": "最近活跃与成交参考排序",
+      "result": "PASS"
+    },
+    {
+      "name": "快捷价格与全新筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "快捷发布时间可以选择并清除",
+      "result": "PASS"
+    },
+    {
+      "name": "卖出记录与四种状态筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "买卖角色隔离与继续沟通",
+      "result": "PASS"
+    },
+    {
+      "name": "个人资料可编辑且正确保存",
+      "result": "PASS"
+    },
+    {
+      "name": "密码可查看且离开页面清空",
+      "result": "PASS"
+    },
+    {
+      "name": "修改密码与其他会话失效",
+      "result": "PASS"
+    },
+    {
+      "name": "三种布局和手机新页面无横向溢出",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}

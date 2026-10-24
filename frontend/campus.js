@@ -1,6 +1,6 @@
 const campusFeatures={
  data(){return{campus:'',wantedItems:[],wantedTotal:0,wantedPage:1,wantedQuery:'',wantedMine:false,wantedOpen:false,wantedId:null,wantedForm:{},verificationForm:{real_name:'',student_no:'',college:'',image_urls:[]},verificationInfo:null,chats:[],activeChat:null,chatMessages:[],chatText:'',chatTimer:null,chatLoading:false,orders:[],appointmentOrder:null,appointmentForm:{meeting_place:'',meeting_time:''},reportProduct:null,reportReason:'',myReports:[],deleteProductTarget:null,adminTab:'verifications',adminData:[],adminOverview:{},adminNote:'',categoryName:'',categoryRows:[],actionBusy:false,campusError:''}},
- computed:{tabTitle(){return{browse:'校园集市',mine:'我的发布',favorites:'我的收藏',wanted:'校园求购',verification:'学生认证',inbox:'消息与交易',reports:'我的举报',admin:'平台管理'}[this.tab]||'夕拾'}},
+ computed:{tabTitle(){return{browse:'校园集市',mine:'我的发布',favorites:'我的收藏',wanted:'校园求购',verification:'学生认证',inbox:'消息与交易',reports:'我的举报',admin:'平台管理',purchases:'我买到的',sales:'我卖出的',profile:'个人资料',security:'账号与安全'}[this.tab]||'夕拾'}},
  beforeUnmount(){clearInterval(this.chatTimer)},
  methods:{
  verificationName(v){return{unverified:'未认证',pending:'待审核',approved:'已认证',rejected:'已退回'}[v]||v},
@@ -12,10 +12,12 @@ const campusFeatures={
    if(this.tab==='wanted'){const r=await this.api('/api/wanted?'+new URLSearchParams({q:this.wantedQuery,mine:this.wantedMine,page:this.wantedPage}));this.wantedItems=r.items;this.wantedTotal=r.total}
    if(this.tab==='verification'){this.verificationInfo=await this.api('/api/me/verification');this.user=await this.api('/api/me')}
    if(this.tab==='inbox')await this.loadInbox();
+   if(['purchases','sales'].includes(this.tab))this.orders=await this.api('/api/orders');
+   if(this.tab==='profile')await this.loadAccount();
    if(this.tab==='reports')this.myReports=await this.api('/api/me/reports');
    if(this.tab==='admin')await this.loadAdmin();
  }catch(e){this.campusError=e.message}},
- async go(tab){if(tab==='chats'||tab==='orders')tab='inbox';if(!['browse','wanted'].includes(tab)&&!this.user){this.authOpen=true;this.notify('请先登录');return}if(tab==='admin'&&this.user?.role!=='admin')return;clearInterval(this.chatTimer);this.tab=tab;if(!this.user)this.wantedMine=false;this.page=1;this.detail=null;this.activeChat=null;this.searchOpen=false;await this.load();if(tab==='inbox')this.chatTimer=setInterval(()=>{if(!document.hidden&&this.tab==='inbox'&&!this.chatLoading)this.loadInbox().catch(()=>{})},4000);window.scrollTo({top:0,behavior:'smooth'})},
+ async go(tab){if(tab==='chats'||tab==='orders')tab='inbox';if(!['browse','wanted'].includes(tab)&&!this.user){this.authOpen=true;this.notify('请先登录');return}if(tab==='admin'&&this.user?.role!=='admin')return;clearInterval(this.chatTimer);if(this.tab!==tab)this.orderStatus='all';this.tab=tab;if(!this.user)this.wantedMine=false;this.page=1;this.detail=null;this.activeChat=null;this.searchOpen=false;await this.load();if(tab==='inbox')this.chatTimer=setInterval(()=>{if(!document.hidden&&this.tab==='inbox'&&!this.chatLoading)this.loadInbox().catch(()=>{})},4000);window.scrollTo({top:0,behavior:'smooth'})},
  async submitVerification(){if(!this.verificationForm.image_urls?.length){this.notify('请上传 1–3 张认证证明图片');return}await this.guarded(async()=>{await this.api('/api/me/verification',{method:'POST',body:JSON.stringify(this.verificationForm)});this.user=await this.api('/api/me');await this.load();this.notify('认证申请已提交，等待管理员审核')})},
  openWanted(p){if(!this.requireStudent())return;this.wantedId=p?.id||null;this.wantedForm=p?{title:p.title,description:p.description,budget:p.budget,condition:p.condition,campus:p.campus}:{title:'',description:'',budget:'',condition:'不限',campus:'主校区'};this.wantedOpen=true},
  async saveWanted(){await this.guarded(async()=>{await this.api('/api/wanted'+(this.wantedId?'/'+this.wantedId:''),{method:this.wantedId?'PUT':'POST',body:JSON.stringify(this.wantedForm)});this.wantedOpen=false;await this.load();this.notify('求购已保存')})},
