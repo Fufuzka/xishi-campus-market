@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>夕拾 · 校园二手集市（测试版）</title><link rel="stylesheet" href="/style.css"><script src="/vendor/vue.global.prod.js" defer></script><script src="/campus.js" defer></script><script src="/experience.js" defer></script><script src="/app.js" defer></script></head>
 <body><div id="app" v-cloak>
-<aside class="sidebar" aria-label="应用导航">
+<div v-if="mobileNavOpen" class="navigation-scrim" aria-hidden="true" @click="closeNavigation"></div>
+<aside id="application-navigation" class="sidebar" :class="{'mobile-open':mobileNavOpen}" :aria-hidden="narrowViewport&&!mobileNavOpen" :inert="narrowViewport&&!mobileNavOpen" aria-label="应用导航" @keydown.tab="trapNavigationFocus">
+<button type="button" class="mobile-nav-close" aria-label="关闭导航" @click="closeNavigation">×</button>
 <a class="brand" href="#" @click.prevent="go('browse')"><span class="brand-icon">↔</span><span>夕拾<small>XISHI MARKET · BETA</small></span></a>
 
 <nav class="app-navigation" aria-label="主导航">
@@ -15,8 +17,8 @@
 <div class="sidebar-note"><span>物尽其用，恰逢所需。</span><p>让校园里的每一件好物，<br>都能拥有新的故事。</p><img src="/assets/plant.svg" alt="绿植插画"></div>
 <div class="sidebar-bottom"><button class="sidebar-setting" aria-label="使用帮助" @click="helpOpen=true"><span>?</span>使用帮助</button><span class="app-version">夕拾 · 测试版 0.2.0-beta.1</span></div>
 </aside>
-<header class="app-topbar"><div class="breadcrumb"><b>{{tabTitle}}</b></div><div class="account"><button class="appearance-button" aria-label="外观设置" title="外观设置" @click="settingsOpen=true"><span>⚙</span><span>外观</span></button><button class="toolbar-button" aria-label="刷新商品" title="刷新商品" @click="load"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 18 17"/></svg></button><span class="toolbar-divider"></span><button v-if="!user" class="login" @click="authOpen=true">登录 / 注册</button><template v-else><span class="avatar">{{user.nickname.slice(0,1)}}</span><span class="account-name">{{user.nickname}}</span><button class="text-btn" @click="logout">退出</button></template><button class="primary publish-button" @click="openEditor()">＋ 发布闲置</button></div></header>
-<main>
+<header class="app-topbar" :inert="narrowViewport&&mobileNavOpen"><div class="mobile-header-left"><button type="button" class="mobile-menu-button" aria-label="打开导航" :aria-expanded="mobileNavOpen" aria-controls="application-navigation" @click="openNavigation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span>夕拾</span></div><div class="breadcrumb"><b>{{tabTitle}}</b></div><div class="account"><button class="appearance-button" aria-label="外观设置" title="外观设置" @click="settingsOpen=true"><span>⚙</span><span>外观</span></button><button class="toolbar-button" aria-label="刷新商品" title="刷新商品" @click="load"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 18 17"/></svg></button><span class="toolbar-divider"></span><button v-if="!user" class="login" @click="authOpen=true">登录 / 注册</button><template v-else><span class="avatar">{{user.nickname.slice(0,1)}}</span><span class="account-name">{{user.nickname}}</span><button class="text-btn" @click="logout">退出</button></template><button class="primary publish-button" @click="openEditor()">＋ 发布闲置</button></div></header>
+<main :inert="narrowViewport&&mobileNavOpen">
 <template v-if="['browse','mine','favorites'].includes(tab)">
 <template v-if="tab==='browse'">
 <div class="workspace-heading"><div><span class="eyebrow">CAMPUS MARKET</span><h1>校园集市</h1><p>发现需要的好物，分享闲置的价值。</p></div><span class="workspace-tag"><i></i> 校园好物，持续流转</span></div>

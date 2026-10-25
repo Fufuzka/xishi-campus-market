@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-25",
+  "scope": "mobile navigation and responsive layout",
+  "passed": [
+    "node --check frontend/app.js",
+    "node --check frontend/campus.js",
+    "node --check frontend/experience.js",
+    "test_frontend_revision_changes_together_and_revalidates_cache",
+    "829px: open both groups, vertical visual arrangement",
+    "829px: select profile, drawer closes, background unlocked, scrollWidth equals viewport width"
+  ],
+  "visual_only": [
+    "390px source preview: header, search, filter controls visible"
+  ],
+  "not_completed": [
+    "320px",
+    "physical phone",
+    "all three layouts",
+    "full mobile workflows",
+    "focus cycling after final markup change"
+  ],
+  "limitation": "Embedded preview interaction could not be verified; native computer control stopped because current browser URL could not be determined reliably."
+}
