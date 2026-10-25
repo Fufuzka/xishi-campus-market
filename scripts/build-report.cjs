@@ -23,8 +23,8 @@ for(const [i,name] of names.entries()){
  let html=marked.parse(md);html=html.replace(/href="\.\.\/evidence\/([^"]+)"/g,'href="evidence/$1"');
  body+=`<article id="chapter${i+1}">${html}</article>`;
 }
-const captions=['集市首页','商品详情与游客联系方式遮蔽','发布商品与上传预览','我的发布与商品管理','买家留言和收藏','个人收藏列表','卖家回复询价','手机端响应式首页','密码显示与隐藏按钮','历史搜索与可能想搜','输入时的搜索联想','组合筛选面板','手机端筛选面板','相关度与价格排序','学生认证申请','管理员认证审核','商品审核','双方私聊','线下面交订单','校园求购','举报处理','手机求购页面','手机管理后台','林间集市布局','轻简横栏布局','清单浏览布局','认证证明图片放大查看','商品三图审核','独立消息与来源','手机消息中心','集市快捷筛选与实验排序','买卖交易中心','个人资料设置','手机账户设置','手机筛选准确定位','桌面筛选准确定位','折叠导航与账号安全','安全问题设置','找回密码流程','按来源整理消息','手机消息中心','手机找回密码','轻简横栏纵向下拉菜单','分类与成色多选','手机多选筛选'];
-const shots=fs.readdirSync(path.join(root,'evidence')).filter(n=>/^(0[1-9]|[12][0-9]|3[0-9]|4[0-5])-.*\.png$/.test(n)).sort();
+const captions=['集市首页','商品详情与游客联系方式遮蔽','发布商品与上传预览','我的发布与商品管理','买家留言和收藏','个人收藏列表','卖家回复询价','手机端响应式首页','密码显示与隐藏按钮','历史搜索与可能想搜','输入时的搜索联想','组合筛选面板','手机端筛选面板','相关度与价格排序','学生认证申请','管理员认证审核','商品审核','双方私聊','线下面交订单','校园求购','举报处理','手机求购页面','手机管理后台','林间集市布局','轻简横栏布局','清单浏览布局','认证证明图片放大查看','商品三图审核','独立消息与来源','手机消息中心','集市快捷筛选与实验排序','买卖交易中心','个人资料设置','手机账户设置','手机筛选准确定位','桌面筛选准确定位','折叠导航与账号安全','安全问题设置','找回密码流程','按来源整理消息','手机消息中心','手机找回密码','轻简横栏纵向下拉菜单','分类与成色多选','手机多选筛选','筛选资源缓存修复'];
+const shots=fs.readdirSync(path.join(root,'evidence')).filter(n=>/^(0[1-9]|[12][0-9]|3[0-9]|4[0-6])-.*\.png$/.test(n)).sort();
 
 body+='<article id="screenshots"><h1>附录 主要功能运行截图</h1><p>以下来自实际本地运行和浏览器验收。图片为模拟数据，非真实交易。</p>'+shots.map((n,i)=>`<figure class="screenshot"><h2>${String(i+1).padStart(2,'0')} ${captions[i]}</h2><img alt="${captions[i]}" src="data:image/png;base64,${fs.readFileSync(path.join(root,'evidence',n)).toString('base64')}"><figcaption>${esc(n)}</figcaption></figure>`).join('')+'</article>';
 const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>夕拾技术文档</title><style>

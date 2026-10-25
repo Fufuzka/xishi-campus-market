@@ -1,8 +1,31 @@
 import io
+import re
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 from backend import main
+
+
+def test_frontend_revision_changes_together_and_revalidates_cache(clients,tmp_path,monkeypatch):
+    a,_=clients
+    source=main.ROOT
+    for name in ('index.html',*main.FRONTEND_ASSETS):
+        target=tmp_path/'frontend'/name
+        target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_bytes((source/'frontend'/name).read_bytes())
+    monkeypatch.setattr(main,'ROOT',tmp_path)
+    first=a.get('/')
+    assert first.headers['cache-control']=='no-store'
+    versions=re.findall(r'\?v=([a-f0-9]{16})',first.text)
+    assert len(versions)==len(main.FRONTEND_ASSETS) and len(set(versions))==1
+    for name in main.FRONTEND_ASSETS:
+        response=a.get('/'+name+'?v='+versions[0])
+        assert response.status_code==200 and response.headers['cache-control']=='no-cache, must-revalidate'
+    app_file=tmp_path/'frontend/app.js'
+    app_file.write_bytes(app_file.read_bytes()+b'\n// updated frontend revision\n')
+    second=a.get('/')
+    new_versions=re.findall(r'\?v=([a-f0-9]{16})',second.text)
+    assert len(set(new_versions))==1 and new_versions[0]!=versions[0]
 
 @pytest.fixture
 def clients(tmp_path, monkeypatch):

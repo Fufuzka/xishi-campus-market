@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, UploadFile, File, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator, model_validator
 from PIL import Image, UnidentifiedImageError
@@ -24,6 +24,7 @@ from PIL import Image, UnidentifiedImageError
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get('MARKET_DATA_DIR', ROOT / 'data'))
 CATEGORIES = ['数码电子', '教材书籍', '生活日用', '运动户外', '服饰配件', '其他好物']
+FRONTEND_ASSETS = ('style.css','vendor/vue.global.prod.js','campus.js','experience.js','app.js')
 STATUS = Literal['on_sale', 'off_shelf', 'sold']
 
 @contextmanager
@@ -95,6 +96,10 @@ async def headers(request, call_next):
     response.headers['Referrer-Policy'] = 'same-origin'
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control'] = 'no-store'
+    elif request.url.path == '/':
+        response.headers['Cache-Control'] = 'no-store'
+    elif request.url.path.lstrip('/') in FRONTEND_ASSETS:
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
     return response
 
 def current_user(request: Request):
@@ -552,7 +557,14 @@ app.mount('/vendor', StaticFiles(directory=ROOT / 'frontend/vendor'), name='vend
 
 @app.get('/', include_in_schema=False)
 def index():
-    return FileResponse(ROOT / 'frontend/index.html')
+    html = (ROOT / 'frontend/index.html').read_text(encoding='utf-8')
+    revision = hashlib.sha256(html.encode('utf-8'))
+    for name in FRONTEND_ASSETS:
+        revision.update((ROOT / 'frontend' / name).read_bytes())
+    version = revision.hexdigest()[:16]
+    for name in FRONTEND_ASSETS:
+        html = html.replace('"/'+name+'"', '"/'+name+'?v='+version+'"')
+    return HTMLResponse(html)
 
 @app.get('/app.js', include_in_schema=False)
 def script():
