@@ -17,7 +17,7 @@ def seed():
         c.execute('INSERT INTO messages(product_id,user_id,content) VALUES(?,?,?)',(1,uid2,'请问教材有很多笔记吗？可以在图书馆面交吗？'))
         c.execute('INSERT INTO messages(product_id,user_id,content,parent_id) VALUES(?,?,?,?)',(1,uid,'有少量铅笔笔记，可以图书馆南门面交。',1))
         c.execute('INSERT INTO favorites(user_id,product_id) VALUES(?,?)',(uid,2))
-    print('演示数据就绪。账号 demo / buyer；密码 Campus2026!。仅供本地课程验收。')
+    print('演示数据就绪。账号 demo / buyer；密码 Campus2026!。仅供本地功能验证。')
 
 if __name__=='__main__':
     seed()

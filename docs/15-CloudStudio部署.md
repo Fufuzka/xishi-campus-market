@@ -4,11 +4,11 @@
 
 ## 1. 仓库与项目结构
 
-按用户明确选择，将原有 `Fufuzka/xishi-campus-market` 仓库改为公开，便于仅接受公开仓库的导入入口使用；不另建仓库、不迁移历史、不添加协作者。运行数据库、图片、认证证明、环境和密钥始终排除在 Git 之外。已有历史桌面 Release 仍标为历史测试版，不是当前网页部署入口。
+仓库使用单服务结构：FastAPI 同时提供前端页面和 API。运行数据库、用户图片、认证证明、环境文件与密钥不纳入版本管理。
 
 公开导入地址：`https://github.com/Fufuzka/xishi-campus-market.git`。
 
-截图里的范例使用 Vite，夕拾采用 FastAPI 同时提供 Vue 页面、静态资源和 API，所有请求为同源相对路径。不需要 Node、Vite、前端单独端口、`VITE_API_BASE_URL` 或 Vite proxy；复制范例的 `/api/v1` 会与夕拾现有 `/api` 路由不一致。
+夕拾采用 FastAPI 同时提供 Vue 页面、静态资源和 API，所有请求为同源相对路径。不需要 Node、Vite、前端单独端口、`VITE_API_BASE_URL` 或 Vite proxy，接口路径以当前 OpenAPI 为准。
 
 ## 2. CloudStudio 操作
 
@@ -17,11 +17,11 @@
 3. 在平台端口／应用预览中打开 **8000** 端口的 HTTPS 预览地址。项目已有 `.vscode/preview.yml`，支持读取该配置的平台可直接点运行／启动。
 4. 浏览器打开平台生成的完整 HTTPS 地址，检查 `/api/health`，再注册学生、提交认证图片、创建管理员审核并验收业务。
 
-若平台只能从 Gitee 导入，需在你自己的 Gitee 账号中通过公开 GitHub 地址导入／同步；本次未代建 Gitee 仓库或登录其他账号。公开 GitHub 仓库本身不等于网站已在 CloudStudio 运行。
+如果平台要求其他 Git 托管源，可通过同步仓库导入。创建代码工作区后仍需运行服务并开放预览端口。
 
 ## 3. 测试数据和管理员
 
-默认不生成演示账号，也不自动创建管理员。需要仅供课程演示的数据时，使用 `sh start.sh --cloud --demo`，并清楚标注演示环境；对已有用户的数据库，seed 不重复写入。
+默认不生成演示账号，也不自动创建管理员。需要仅供功能演示的数据时，使用 `sh start.sh --cloud --demo`，并清楚标注演示环境；对已有用户的数据库，seed 不重复写入。
 
 首次依赖安装后，另开终端创建管理员：
 
@@ -64,9 +64,9 @@ sh start.sh --cloud
 
 ## 5. 数据与运行状态
 
-数据库、上传商品图片和认证证明都在 MARKET_DATA_DIR 下。若平台磁盘是临时的，应先配置持久化目录并做备份；工作环境停止、重置或到期时，预览服务也可能停止。课程演示预览与长期运行的公网生产部署应分别记录。
+数据库、上传商品图片和认证证明都在 MARKET_DATA_DIR 下。若平台磁盘是临时的，应先配置持久化目录并做备份；工作环境停止、重置或到期时，预览服务也可能停止。开发预览与长期运行的公网生产部署应分别记录。
 
-当前代码仍为测试版。本次准备与验证启动配置，并未登录你的 CloudStudio 工作区，也未生成真实远程访问地址。正式公网部署仍需完成原部署文档里的身份核验、限流、HTTPS、数据备份恢复及导师评审。
+当前代码仍为测试版。预览地址由平台生成；长期运行环境需完成身份校验、限流、HTTPS 与数据备份恢复验证。
 
 ## 6. 验证和官方参考
 
@@ -74,7 +74,7 @@ sh start.sh --cloud
 
 新增 Ubuntu GitHub Actions 任务，从公开代码安装依赖并执行同一启动脚本与验收，结果见仓库 Actions。接口自动化覆盖代理来源配置和 Secure Cookie，Linux 任务状态以真实运行结果为准。
 
-依据腾讯云官方 [配置运行文件](https://cloud.tencent.com/document/product/1039/131807) 使用 `.vscode/preview.yml` 的 apps、root、run、port、mainPort；依据 [URL 访问异常排查](https://cloud.tencent.com/document/product/1039/131933) 采用 0.0.0.0 监听及平台预览地址变量。用户提供的范例仅作为目标环境参考，不照搬其他项目的 Vite 配置。
+依据腾讯云官方 [配置运行文件](https://cloud.tencent.com/document/product/1039/131807) 使用 `.vscode/preview.yml` 的 apps、root、run、port、mainPort；依据 [URL 访问异常排查](https://cloud.tencent.com/document/product/1039/131933) 采用 0.0.0.0 监听及平台预览地址变量。
 
 ## 7. Python 版本与创建环境失败
 

@@ -1,42 +1,53 @@
-# 夕拾的个人开发流程
+# 开发指南
 
-此仓库由个人维护，按用户在 2026-10-21 的明确选择改为公开，便于部署平台导入；未添加协作者，也未为项目附加开源许可。第三方组件仍适用各自许可，见 THIRD_PARTY_NOTICES.md。仓库可见性与软件部署是两件事：代码保存到 GitHub 不会自动将网站部署到公网。
+## 环境
 
-## 日常修改
+使用 Python 3.11 或 3.12，按 README 启动服务。前端依赖已随仓库保存；浏览器自动化和离线文档生成另需 Node.js 及对应依赖。
 
-小改动可以在 main 开发并提交；较大功能建议新建分支，如 `feature/product-management`，完成检查后合并。提交信息说明实际改变，例如“增加密码查看按钮”，不要伪造过去的开发历史。
+通过 MARKET_DATA_DIR 指向独立开发数据库。运行数据、上传图片、认证证明、日志、密钥与虚拟环境不提交到 Git。
 
-```powershell
-git status
-git add frontend/app.js frontend/index.html frontend/style.css
-git commit -m "完善商品列表交互"
-git push
-```
+## 变更流程
 
-首次从其他电脑使用：克隆仓库，安装 Python 3.12，按 README 启动。在浏览器打开服务地址进行测试。
+1. 明确问题、预期行为与受影响模块。较大功能使用独立分支。
+2. 修改实现；涉及字段、状态或权限时同步更新规格、数据库或 API 文档。
+3. 按影响范围验证：界面改动检查浏览器，接口改动运行相关回归。
+4. 检查 git diff，提交能说明具体变化的信息。
 
-## 检查与自动测试
+提交信息和公开文档描述项目的实际问题、实现及验证，不包含对话记录、个人环境细节或与项目无关的说明。
 
-```powershell
+## 自动化检查
+
+```sh
 python -m pytest -q
 node --check frontend/app.js
+node --check frontend/campus.js
+node --check frontend/experience.js
 ```
 
-main 推送和 Pull Request 会触发 GitHub Actions，执行 JavaScript 语法及 API 测试。该工作流不会启动图形窗口，不做公网部署，不替代浏览器验收。已有截图与结果是历史验收材料，代码变动后应按影响范围更新。
+main 推送和 Pull Request 触发 GitHub Actions：Windows 接口与语法检查，以及 Linux Python 3.11／3.12 的启动验证。CI 不会自动部署网站。
 
-## 不纳入 Git 的文件
+## 浏览器检查
 
-运行数据库、用户上传、日志、环境文件与密钥、虚拟环境、构建缓存、EXE 和 ZIP 均被 .gitignore 排除。演示用公开账号的初始化脚本属于可重现测试材料；它不是 GitHub 或服务器凭据。
+安装 Node.js、Playwright 和 Edge，在隔离数据库启动服务，并显式创建测试管理员。设置 BASE_URL、TEST_ADMIN_USERNAME、TEST_ADMIN_PASSWORD 后执行所需脚本：
 
-提交前检查 `git status` 和 `git diff --cached`，确认没有真实账号、密码、Cookie、访问令牌或用户数据。无需把 Python 虚拟环境和生成的安装包放进仓库。
+```sh
+node scripts/browser-test.cjs
+node scripts/search-browser-test.cjs
+node scripts/campus-browser-test.cjs
+node scripts/auth-browser-test.cjs
+node scripts/experience-browser-test.cjs
+```
 
-## 测试版管理
+账号与布局专项见 scripts/account-browser-test.cjs；导航与恢复专项见 scripts/navigation-recovery-browser-test.cjs。后两者使用独立实验数据。脚本会写入测试账号、商品、消息和恢复设置，不应指向实际使用的数据库；重复运行恢复场景时需使用新的测试数据目录或等待限流窗口结束。
 
-当前为网页测试版 0.2.0-beta.1。后续用 beta 编号记录迭代，例如 0.2.0-beta.2；未经用户明确确认，不标为正式版，不创建稳定版发布。
+## 文档与版本
 
-1. 完成改动，运行 API 与浏览器验收，更新实际证据和文档。
-2. 代码通过 Git 提交管理；每次修改不必创建 Release。
-3. 如需保存测试节点，标签包含 beta；GitHub Release 必须勾选 Pre-release，不上传 EXE。
-4. 未来部署到服务器后，仍在浏览器验收并保持测试版标识，公网部署不等于正式发布。
+技术文档入口为 [docs/README.md](docs/README.md)，OpenAPI 可由 backend.main.app.openapi() 生成。使用 scripts/build-report.cjs 将 Markdown 导出为本地离线文档，生成文件不纳入 Git。
 
-不要提交公网服务器凭据。部署凭据使用受限 Secrets，不把密钥写入代码。
+当前版本为 0.2.0-beta.1。测试版本标签包含 beta，GitHub Release 标记为 Pre-release。日常修改通过提交记录，不必为每个变更创建 Release。
+
+## 提交检查
+
+- 源码和技术文档描述当前实现，测试结果注明执行范围。
+- 不提交真实账号、密码、Cookie、访问令牌、用户资料和数据库。
+- 保留第三方许可声明；尚无项目源码开源许可证。

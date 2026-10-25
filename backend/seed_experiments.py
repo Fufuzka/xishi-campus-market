@@ -10,7 +10,7 @@ def seed_experiments():
             raise ValueError('实验数据仅允许导入空数据库。请设置新的 MARKET_DATA_DIR，不会修改已有账号或交易。')
     seed()
     with db() as c:
-        c.execute("UPDATE users SET is_demo=1,bio='【模拟资料】仅用于课程演示，不是真实交易记录。',nickname='模拟 · '||nickname")
+        c.execute("UPDATE users SET is_demo=1,bio='【模拟资料】仅用于功能演示，不是真实交易记录。',nickname='模拟 · '||nickname")
         c.execute("UPDATE users SET last_active_at=datetime('now','-2 days') WHERE username='demo'")
         c.execute("UPDATE users SET last_active_at=datetime('now','-2 hours') WHERE username='buyer'")
         c.execute("UPDATE products SET title='【模拟】'||title")
