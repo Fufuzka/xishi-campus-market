@@ -1,0 +1,48 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "width": 1920,
+      "name": "我的交易",
+      "result": "PASS"
+    },
+    {
+      "width": 1920,
+      "name": "账户设置",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "name": "我的交易",
+      "result": "PASS"
+    },
+    {
+      "width": 1440,
+      "name": "账户设置",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "name": "我的交易",
+      "result": "PASS"
+    },
+    {
+      "width": 1024,
+      "name": "账户设置",
+      "result": "PASS"
+    },
+    {
+      "layout": "林间集市",
+      "result": "PASS"
+    },
+    {
+      "layout": "清单浏览",
+      "result": "PASS"
+    },
+    {
+      "width": 390,
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}
