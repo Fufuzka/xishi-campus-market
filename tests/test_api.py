@@ -171,6 +171,41 @@ def test_condition_and_published_within_combined(clients):
     assert b.get('/api/products?condition=全新&published_within=14').json()['total']==2
     assert b.get('/api/products?published_within=1').json()['total']==2
 
+
+def test_multiple_categories_and_conditions_use_or_within_and_between(clients):
+    a,b=clients;signup(a)
+    book=approved_post(a,json=payload(category='教材书籍',condition='全新',price=20)).json()['id']
+    device=approved_post(a,json=payload(category='数码电子',condition='几乎全新',price=30)).json()['id']
+    approved_post(a,json=payload(category='生活日用',condition='全新',price=25))
+    approved_post(a,json=payload(category='教材书籍',condition='正常使用',price=15))
+    params=[('category','教材书籍'),('category','数码电子'),('condition','全新'),('condition','几乎全新')]
+    result=b.get('/api/products',params=params).json()
+    assert {p['id'] for p in result['items']}=={book,device} and result['total']==2
+    result=b.get('/api/products',params=params+[('min_price',25),('sort','price_desc')]).json()
+    assert [p['id'] for p in result['items']]==[device]
+
+
+def test_multiple_filters_deduplicate_and_keep_single_value_compatibility(clients):
+    a,b=clients;signup(a);publish(a)
+    one=b.get('/api/products?category=教材书籍&condition=轻微使用').json()
+    repeated=b.get('/api/products',params=[('category',''),('category','教材书籍'),('category','教材书籍'),('condition','轻微使用'),('condition','轻微使用')]).json()
+    assert one==repeated and one['total']==1
+    assert b.get('/api/products?category=').json()['total']==1
+    assert b.get('/api/products',params=[('condition','全新'),('condition','损坏')]).status_code==422
+
+
+def test_multiple_filters_preserve_review_privacy_and_pagination(clients):
+    a,b=clients;signup(a)
+    for category in ['教材书籍','数码电子']:
+        approved_post(a,json=payload(category=category,condition='全新'))
+    a.post('/api/products',json=payload(category='教材书籍',condition='全新'))
+    params=[('category','教材书籍'),('category','数码电子'),('condition','全新'),('page_size',1)]
+    first=b.get('/api/products',params=params).json()
+    second=b.get('/api/products',params=params+[('page',2)]).json()
+    assert first['total']==second['total']==2
+    assert first['items'][0]['id']!=second['items'][0]['id']
+    assert 'contact' not in first['items'][0]
+
 @pytest.mark.parametrize('query',['condition=损坏','published_within=2','published_within=0','published_within=15','published_within=abc','min_price=NaN','max_price=Infinity','min_price=0.001'])
 def test_search_filter_validation(clients,query):
     _,b=clients

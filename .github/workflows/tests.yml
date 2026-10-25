@@ -35,6 +35,7 @@ jobs:
           node --check scripts/experience-browser-test.cjs
           node --check scripts/account-browser-test.cjs
           node --check scripts/navigation-recovery-browser-test.cjs
+          node --check scripts/multiselect-browser-test.cjs
           node --check scripts/campus-browser-test.cjs
           node --check scripts/browser-helpers.cjs
           node --check scripts/auth-browser-test.cjs

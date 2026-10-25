@@ -349,7 +349,7 @@ def search_suggestions(q: str = Query('',max_length=100), limit: int = Query(8,g
     return {'items':result[:limit]}
 
 @app.get('/api/products', tags=['商品'])
-def products(q: str = Query('', max_length=100), category: str = '', campus: str = Query('',max_length=40), min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc','recent_active','completed_sales']='relevance', reduced: bool = False, condition: Literal['全新','几乎全新','轻微使用','正常使用'] | None = None, published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
+def products(q: str = Query('', max_length=100), category: list[str] = Query(default=[],max_length=50), campus: str = Query('',max_length=40), min_price: Decimal = Query(0, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), max_price: Decimal = Query(999999, ge=0, le=999999,decimal_places=2,allow_inf_nan=False), sort: Literal['relevance','newest','price_asc','price_desc','recent_active','completed_sales']='relevance', reduced: bool = False, condition: list[Literal['全新','几乎全新','轻微使用','正常使用']] = Query(default=[],max_length=20), published_within: int | None = Query(None,ge=1,le=14), page: int = Query(1, ge=1), page_size: int = Query(12, ge=1, le=48)):
     if min_price > max_price:
         raise HTTPException(422, '最低价不能高于最高价')
     if published_within is not None and published_within not in (1,3,7,14):
@@ -361,15 +361,19 @@ def products(q: str = Query('', max_length=100), category: str = '', campus: str
     for token in tokens:
         where += ' AND (instr(lower(p.title),lower(?))>0 OR instr(lower(p.description),lower(?))>0)'
         args.extend([token,token])
-    if category:
-        where += ' AND p.category=?'
-        args.append(category)
+    selected_categories=list(dict.fromkeys(x for x in category if x))
+    if any(len(x)>30 for x in selected_categories):
+        raise HTTPException(422, '分类名称过长')
+    if selected_categories:
+        where += ' AND p.category IN ('+','.join('?' for _ in selected_categories)+')'
+        args.extend(selected_categories)
     if campus:
         where += ' AND p.campus=?'
         args.append(campus)
-    if condition:
-        where += ' AND p.condition=?'
-        args.append(condition)
+    selected_conditions=list(dict.fromkeys(condition))
+    if selected_conditions:
+        where += ' AND p.condition IN ('+','.join('?' for _ in selected_conditions)+')'
+        args.extend(selected_conditions)
     if published_within:
         where += " AND p.created_at>=datetime('now',?)"
         args.append(f'-{published_within} days')

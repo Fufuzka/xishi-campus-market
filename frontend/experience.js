@@ -25,9 +25,7 @@ const experienceFeatures={
  async saveProfile(){if(this.accountSaving)return;this.accountSaving=true;try{await this.api('/api/me/profile',{method:'PATCH',body:JSON.stringify(this.profileForm)});this.user=await this.api('/api/me');this.notify('个人资料已保存')}catch(e){this.notify(e.message)}finally{this.accountSaving=false}},
  async savePassword(){if(this.accountSaving)return;if(this.passwordForm.new_password!==this.passwordForm.confirm_password){this.notify('两次新密码输入不一致');return}this.accountSaving=true;try{await this.api('/api/me/password',{method:'POST',body:JSON.stringify(this.passwordForm)});this.passwordForm={current_password:'',new_password:'',confirm_password:''};this.passwordVisible=false;this.notify('密码已修改，其他设备的登录已失效')}catch(e){this.notify(e.message)}finally{this.accountSaving=false}},
  toggleReduced(){this.reduced=!this.reduced;this.page=1;this.load()},
- quickCondition(){this.condition=this.condition==='全新'?'':'全新';this.page=1;this.load()},
- quickTime(days){this.publishedWithin=days;this.page=1;this.load()},
- applyQuickPrice(){this.filterDraft={campus:this.campus,category:this.category,condition:this.condition,minPrice:this.minPrice,maxPrice:this.maxPrice,publishedWithin:this.publishedWithin};this.applyFilters()},
+ applyQuickPrice(){this.filterDraft={campus:this.campus,category:[...this.category],condition:[...this.condition],minPrice:this.minPrice,maxPrice:this.maxPrice,publishedWithin:this.publishedWithin};this.applyFilters()},
 
  setLayout(id){if(!this.layouts.some(x=>x.id===id))return;this.layout=id;document.body.dataset.layout=id;try{localStorage.setItem('xishi-layout',id)}catch{this.notify('布局已切换，本次浏览器无法保存设置')}},
  imagesOf(p){return p?.image_urls?.length?p.image_urls:p?.image_url?[p.image_url]:[]},

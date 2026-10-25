@@ -115,3 +115,7 @@ PATCH 请求 `{"status":"off_shelf"}`，状态只能为 on_sale / off_shelf / so
 ## 9. 1.3 搜索接口
 
 GET /search/suggestions 接受 q（最多 100 字）、limit（默认 8、1–24），返回 items 字符串数组；只从真实在售标题生成候选。GET /search/history 返回当前范围的 items 及 scope（account / device）。POST /search/history 接受 keyword；DELETE /search/history 通过可选 keyword 删除一条或清空当前范围。游客通过 HttpOnly 随机设备 Cookie 识别，不要求登录；登录账号与游客范围不合并。详见 12 文档和导出的 OpenAPI。
+
+## 商品多值过滤
+
+GET /api/products 的 category 和 condition 接受重复查询参数。category 最多 50 项、名称不超过 30 字；condition 最多 20 项，值仍为全新、几乎全新、轻微使用、正常使用。服务端去重，同组为 OR，不同条件组为 AND。旧单值调用保持兼容；条件非法返回 422。完整数组约束见 OpenAPI。

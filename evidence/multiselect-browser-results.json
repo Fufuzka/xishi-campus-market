@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "集市外部成色和时间快捷入口已移除",
+      "result": "PASS"
+    },
+    {
+      "name": "分类和成色支持多选、再点取消且取消草稿不生效",
+      "result": "PASS"
+    },
+    {
+      "name": "重复查询参数与组内或、组间且匹配正确",
+      "result": "PASS"
+    },
+    {
+      "name": "逐个移除标签且重新打开保留其他选择",
+      "result": "PASS"
+    },
+    {
+      "name": "重置清空多选并保留抽屉内发布时间筛选",
+      "result": "PASS"
+    },
+    {
+      "name": "三种布局手机可进入筛选并操作多选",
+      "result": "PASS"
+    }
+  ],
+  "pageErrors": []
+}

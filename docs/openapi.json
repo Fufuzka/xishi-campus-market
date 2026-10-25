@@ -434,8 +434,12 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "default": "",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "default": [],
               "title": "Category"
             }
           },
@@ -521,20 +525,18 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "全新",
-                    "几乎全新",
-                    "轻微使用",
-                    "正常使用"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "array",
+              "items": {
+                "enum": [
+                  "全新",
+                  "几乎全新",
+                  "轻微使用",
+                  "正常使用"
+                ],
+                "type": "string"
+              },
+              "maxItems": 20,
+              "default": [],
               "title": "Condition"
             }
           },
