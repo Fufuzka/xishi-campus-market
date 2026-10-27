@@ -317,3 +317,30 @@ def test_https_deployment_sets_secure_cookie(clients,monkeypatch):
     assert response.status_code==201
     cookie=response.headers['set-cookie']
     assert 'Secure' in cookie and 'HttpOnly' in cookie and 'SameSite=lax' in cookie
+
+
+def test_http_session_and_admin_navigation(clients,monkeypatch):
+    a,_=clients
+    monkeypatch.setenv('COOKIE_SECURE','0')
+    from backend.create_admin import create_admin
+    create_admin('http_admin','HttpAdmin2026!')
+    login=a.post('/api/auth/login',json={'username':'http_admin','password':'HttpAdmin2026!'})
+    assert login.status_code==200
+    assert 'Secure' not in login.headers['set-cookie']
+    for page in ['/api/me','/api/me/profile','/api/orders','/api/conversations','/api/admin/overview','/api/admin/verifications']:
+        assert a.get(page).status_code==200,page
+    assert a.get('/api/me').json()['role']=='admin'
+    with main.db() as c:
+        stored=c.execute("SELECT password_hash FROM users WHERE username='http_admin'").fetchone()[0]
+    assert stored!='HttpAdmin2026!'
+    with pytest.raises(ValueError):
+        create_admin('http_admin','Different2026!')
+    a.post('/api/auth/logout')
+    assert a.get('/api/admin/overview').status_code==401
+
+
+def test_secure_cookie_does_not_authenticate_plain_http(clients,monkeypatch):
+    a,_=clients
+    monkeypatch.setenv('COOKIE_SECURE','1')
+    signup(a,'http_rejected_cookie')
+    assert a.get('/api/me').status_code==401

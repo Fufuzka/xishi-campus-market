@@ -46,6 +46,8 @@ jobs:
         env:
           MARKET_DATA_DIR: ${{ runner.temp }}/xishi-ci-data
         run: python -m pytest -q --junitxml=test-results.xml
+      - name: Run session state regressions
+        run: node scripts/auth-session-test.cjs
       - name: Save test results
         if: always()
         uses: actions/upload-artifact@v4

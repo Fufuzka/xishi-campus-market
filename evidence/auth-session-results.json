@@ -1,0 +1,14 @@
+{
+  "passed": 9,
+  "checks": [
+    "Login is published only after the session round trip",
+    "Rejected Cookie keeps login open with an actionable error",
+    "Wrong password retains its own error",
+    "Delayed old 401 cannot erase a newer login",
+    "Initial page probe cannot overwrite a completed login",
+    "A request sent during login cannot invalidate the confirmed session",
+    "Current session expiry still clears the logged in state",
+    "Unexpected account identity is not accepted",
+    "Session verification network failure is not success"
+  ]
+}
